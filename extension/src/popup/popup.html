@@ -11,166 +11,101 @@
     <header class="header">
       <div class="logo">
         <div class="logo-dot"></div>
-        <span class="logo-text">Recorder</span>
+        <span>Recorder</span>
       </div>
-      <div class="header-actions">
-        <button class="icon-btn" id="openAppBtn" title="Open full app">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        </button>
-      </div>
+      <button class="link-btn" id="openAppBtn">Open app</button>
     </header>
 
-    <!-- ── IDLE STATE ── -->
+    <!-- ── IDLE ── -->
     <div id="idle-view">
 
-      <!-- Mode tabs -->
-      <div class="mode-tabs">
-        <button class="mode-tab active" data-mode="screen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          Screen
+      <!-- Mode selector -->
+      <div class="modes">
+        <button class="mode active" data-mode="screen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         </button>
-        <button class="mode-tab" data-mode="screen-camera">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
-          Cam
+        <button class="mode" data-mode="screen-camera">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15.2 10.7l4-2.2a.8.8 0 011.3.7v5.6a.8.8 0 01-1.3.7l-4-2.2"/><rect x="3" y="6.5" width="12.5" height="11" rx="2"/></svg>
         </button>
-        <button class="mode-tab" data-mode="screenshot">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
-          Screenshot
+        <button class="mode" data-mode="screenshot">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
       </div>
 
-      <!-- Recording target -->
-      <div class="section">
-        <div class="section-label">Capture</div>
-        <div class="target-pills">
-          <button class="pill active" data-target="screen">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            Full Screen
-          </button>
-          <button class="pill" data-target="window">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-            Window
-          </button>
-          <button class="pill" data-target="tab">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-            Tab
-          </button>
+      <!-- Devices -->
+      <div class="devices">
+        <div class="device" id="cameraRow">
+          <svg class="device-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15.2 10.7l4-2.2a.8.8 0 011.3.7v5.6a.8.8 0 01-1.3.7l-4-2.2"/><rect x="3" y="6.5" width="12.5" height="11" rx="2"/></svg>
+          <select id="cameraSelect" class="device-sel"><option value="">No Camera</option></select>
+          <label class="sw"><input type="checkbox" id="cameraToggle"><span class="sw-track"></span></label>
+        </div>
+        <div class="device">
+          <svg class="device-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <select id="micSelect" class="device-sel"><option value="">No Microphone</option></select>
+          <label class="sw"><input type="checkbox" id="micToggle" checked><span class="sw-track"></span></label>
         </div>
       </div>
 
-      <!-- Camera row -->
-      <div class="section device-row" id="cameraRow">
-        <div class="device-icon camera-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="3" y="6" width="12" height="12" rx="2"/></svg>
+      <!-- Options -->
+      <div class="opts">
+        <div class="opt">
+          <span class="opt-label">HD</span>
+          <label class="sw sm"><input type="checkbox" id="hdToggle" checked><span class="sw-track"></span></label>
         </div>
-        <select class="device-select" id="cameraSelect">
-          <option value="">No Camera</option>
-        </select>
-        <label class="toggle-switch">
-          <input type="checkbox" id="cameraToggle">
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <!-- Mic row -->
-      <div class="section device-row">
-        <div class="device-icon mic-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-        </div>
-        <select class="device-select" id="micSelect">
-          <option value="">No Microphone</option>
-        </select>
-        <label class="toggle-switch">
-          <input type="checkbox" id="micToggle" checked>
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      <!-- Options row (Quality + Countdown + Annotations) -->
-      <div class="section options-row">
-        <div class="option-group">
-          <span class="option-label">Quality</span>
-          <div class="quality-pills">
-            <button class="q-pill" data-q="720">720p</button>
-            <button class="q-pill active" data-q="1080">1080p</button>
-          </div>
-        </div>
-        <div class="option-group">
-          <span class="option-label">Countdown</span>
-          <label class="toggle-switch sm">
-            <input type="checkbox" id="countdownToggle" checked>
-            <span class="slider"></span>
-          </label>
-        </div>
-        <div class="option-group">
-          <span class="option-label">Annotate</span>
-          <label class="toggle-switch sm">
-            <input type="checkbox" id="annotateToggle">
-            <span class="slider"></span>
-          </label>
+        <div class="opt">
+          <span class="opt-label">Countdown</span>
+          <label class="sw sm"><input type="checkbox" id="countdownToggle" checked><span class="sw-track"></span></label>
         </div>
       </div>
 
-      <!-- Start button -->
-      <div class="section">
-        <button class="start-btn" id="startBtn">
-          <div class="start-dot"></div>
-          Start Recording
-        </button>
-        <p class="no-limit-badge">&#10022; No time limit</p>
+      <!-- Start -->
+      <div class="start-wrap">
+        <button class="start-btn" id="startBtn">Start Recording</button>
+        <span class="badge-free">No time limit</span>
       </div>
 
     </div>
-    <!-- ── END IDLE VIEW ── -->
 
-    <!-- ── COUNTDOWN VIEW ── -->
+    <!-- ── COUNTDOWN ── -->
     <div id="countdown-view" class="hidden">
-      <div class="countdown-wrap">
-        <div class="countdown-ring">
-          <span id="countdown-num">3</span>
-        </div>
-        <p class="countdown-label">Recording starts in&hellip;</p>
-        <button class="cancel-sm" id="cancelCountdownBtn">Cancel</button>
+      <div class="cd-center">
+        <div class="cd-ring"><span id="countdown-num">3</span></div>
+        <p class="cd-text">Starting…</p>
+        <button class="text-btn" id="cancelCountdownBtn">Cancel</button>
       </div>
     </div>
 
-    <!-- ── RECORDING VIEW ── -->
+    <!-- ── RECORDING ── -->
     <div id="recording-view" class="hidden">
-      <div class="rec-header">
-        <div class="rec-indicator">
-          <div class="rec-dot"></div>
-          <span id="rec-timer">0:00</span>
-        </div>
-        <span id="rec-mode-label" class="rec-mode-badge">Screen</span>
+      <div class="rec-bar">
+        <span class="rec-live"></span>
+        <span class="rec-time" id="rec-timer">0:00</span>
+        <span class="rec-badge" id="rec-mode-label">Screen</span>
       </div>
-      <div class="rec-actions">
-        <button class="rec-action-btn" id="pauseBtn">
+      <div class="rec-btns">
+        <button class="rec-btn" id="pauseBtn">
           <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
           Pause
         </button>
-        <button class="rec-action-btn danger" id="stopBtn">
-          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+        <button class="rec-btn red" id="stopBtn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
           Stop
         </button>
-        <button class="rec-action-btn ghost" id="cancelRecBtn">
+        <button class="rec-btn muted" id="cancelRecBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           Discard
         </button>
       </div>
     </div>
 
-    <!-- Recent recordings -->
-    <div class="divider"></div>
-    <div class="recents-section">
-      <div class="recents-header">
-        <span class="recents-title">Recent</span>
-        <span id="rec-count" class="badge">0</span>
+    <!-- Recents -->
+    <div class="recents" id="recents-section">
+      <div class="recents-hdr">
+        <span>Recent</span>
+        <span class="cnt" id="rec-count">0</span>
       </div>
-      <div id="recordings-list" class="recordings-list">
-        <div class="empty-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-          No recordings yet
-        </div>
+      <div id="recordings-list" class="rec-list">
+        <p class="empty">No recordings yet</p>
       </div>
     </div>
 
