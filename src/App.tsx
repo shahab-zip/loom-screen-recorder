@@ -233,64 +233,70 @@ function AppContent() {
 
       {/* Recording Modal */}
       {showRecordingModal && (
-        <Suspense fallback={null}>
-          <RecordingModal
-            onClose={closeRecordingModal}
-            onStartRecording={handleStartRecording}
-          />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <RecordingModal
+              onClose={closeRecordingModal}
+              onStartRecording={handleStartRecording}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* Camera PiP bubble (screen + camera mode) */}
       {isRecording && recorder.cameraStream && (
-        <Suspense fallback={null}>
-          <CameraBubble stream={recorder.cameraStream} />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <CameraBubble stream={recorder.cameraStream} />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* Recording Controls + Annotation overlay */}
       {isRecording && (
-        <Suspense fallback={null}>
-          <RecordingControls
-            onStop={handleStopRecording}
-            onCancel={handleCancelRecording}
-            onPause={handleTogglePause}
-            isPaused={isPaused}
-            duration={recordingDuration}
-            isSaving={isSaving}
-            recordingType="video"
-            onToggleAnnotations={handleToggleAnnotations}
-            isAnnotating={isAnnotating}
-          />
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <RecordingControls
+              onStop={handleStopRecording}
+              onCancel={handleCancelRecording}
+              onPause={handleTogglePause}
+              isPaused={isPaused}
+              duration={recordingDuration}
+              isSaving={isSaving}
+              recordingType="video"
+              onToggleAnnotations={handleToggleAnnotations}
+              isAnnotating={isAnnotating}
+            />
 
-          {isAnnotating && annotationTool && (
-            <>
-              <AnnotationToolbar
-                isOpen={isAnnotating}
-                onClose={() => dispatch({ type: 'SET_ANNOTATING', payload: false })}
-                activeTool={annotationTool as AnnotationTool}
-                onToolChange={setAnnotationToolCb}
-                color={annotationColor}
-                onColorChange={setAnnotationColorCb}
-                strokeWidth={annotationStrokeWidth}
-                onStrokeWidthChange={setAnnotationStrokeWidthCb}
-                onUndo={handleAnnotationUndo}
-                onRedo={handleAnnotationRedo}
-                onClear={handleAnnotationClear}
-                canUndo={canUndo}
-                canRedo={canRedo}
-              />
-              <AnnotationCanvas
-                ref={annotationCanvasRef}
-                isActive={isAnnotating}
-                tool={annotationTool as AnnotationTool}
-                color={annotationColor}
-                strokeWidth={annotationStrokeWidth}
-                onHistoryChange={handleHistoryChange}
-              />
-            </>
-          )}
-        </Suspense>
+            {isAnnotating && annotationTool && (
+              <>
+                <AnnotationToolbar
+                  isOpen={isAnnotating}
+                  onClose={() => dispatch({ type: 'SET_ANNOTATING', payload: false })}
+                  activeTool={annotationTool as AnnotationTool}
+                  onToolChange={setAnnotationToolCb}
+                  color={annotationColor}
+                  onColorChange={setAnnotationColorCb}
+                  strokeWidth={annotationStrokeWidth}
+                  onStrokeWidthChange={setAnnotationStrokeWidthCb}
+                  onUndo={handleAnnotationUndo}
+                  onRedo={handleAnnotationRedo}
+                  onClear={handleAnnotationClear}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
+                />
+                <AnnotationCanvas
+                  ref={annotationCanvasRef}
+                  isActive={isAnnotating}
+                  tool={annotationTool as AnnotationTool}
+                  color={annotationColor}
+                  strokeWidth={annotationStrokeWidth}
+                  onHistoryChange={handleHistoryChange}
+                />
+              </>
+            )}
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {/* Saving overlay */}
