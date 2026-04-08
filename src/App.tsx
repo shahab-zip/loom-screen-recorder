@@ -135,6 +135,9 @@ function AppContent() {
   const filteredVideos = useMemo(() => {
     return videos
       .filter(v => {
+        // Workspace filter — 'default' shows everything
+        if (currentWorkspaceId !== 'default' && v.workspaceId !== currentWorkspaceId) return false;
+        // View type filter
         if (viewType === 'clips') return v.duration < 300;
         if (viewType === 'meetings') return v.duration >= 900;
         if (viewType === 'archive') return false;
@@ -145,7 +148,7 @@ function AppContent() {
         if (sortType === 'oldest') return a.createdAt.getTime() - b.createdAt.getTime();
         return b.views - a.views;
       });
-  }, [videos, viewType, sortType]);
+  }, [videos, viewType, sortType, currentWorkspaceId]);
 
   // ── Content router ────────────────────────────────────
 
@@ -166,11 +169,11 @@ function AppContent() {
 
     switch (currentView) {
       case 'for-you':
-        return <ForYou videos={videos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} />;
+        return <ForYou videos={filteredVideos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} />;
       case 'library':
         return (
           <VideoLibrary
-            videos={videos}
+            videos={filteredVideos}
             onVideoClick={handleVideoClick}
             onNewVideo={openRecordingModal}
             onDeleteVideo={handleDeleteVideo}

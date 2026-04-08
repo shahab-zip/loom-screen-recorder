@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Calendar as CalendarIcon, Plus, Clock, Users, Video, ExternalLink, Copy, Trash2 } from 'lucide-react';
+import { getStorageItem, setStorageItem } from '../lib/storage';
 
 interface Meeting {
   id: string;
@@ -16,37 +17,43 @@ interface MeetingsProps {
   onNewVideo: () => void;
 }
 
+const DEFAULT_MEETINGS: Meeting[] = [
+  {
+    id: '1',
+    title: 'Team Standup',
+    date: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
+    duration: 30,
+    participants: 5,
+    link: 'https://meet.example.com/team-standup',
+    status: 'upcoming'
+  },
+  {
+    id: '2',
+    title: 'Product Demo',
+    date: new Date(Date.now() + 24 * 60 * 60 * 1000), // tomorrow
+    duration: 60,
+    participants: 12,
+    link: 'https://meet.example.com/product-demo',
+    status: 'upcoming'
+  },
+  {
+    id: '3',
+    title: 'Client Presentation',
+    date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+    duration: 45,
+    participants: 8,
+    link: 'https://meet.example.com/client-presentation',
+    status: 'completed',
+    recordingId: 'rec-123'
+  }
+];
+
 export function Meetings({ onNewVideo }: MeetingsProps) {
-  const [meetings, setMeetings] = useState<Meeting[]>([
-    {
-      id: '1',
-      title: 'Team Standup',
-      date: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
-      duration: 30,
-      participants: 5,
-      link: 'https://meet.example.com/team-standup',
-      status: 'upcoming'
-    },
-    {
-      id: '2',
-      title: 'Product Demo',
-      date: new Date(Date.now() + 24 * 60 * 60 * 1000), // tomorrow
-      duration: 60,
-      participants: 12,
-      link: 'https://meet.example.com/product-demo',
-      status: 'upcoming'
-    },
-    {
-      id: '3',
-      title: 'Client Presentation',
-      date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
-      duration: 45,
-      participants: 8,
-      link: 'https://meet.example.com/client-presentation',
-      status: 'completed',
-      recordingId: 'rec-123'
-    }
-  ]);
+  const [meetings, setMeetings] = useState<Meeting[]>(() => {
+    const saved = getStorageItem<Meeting[]>('meetings', []);
+    const hydrated = saved.map(m => ({ ...m, date: new Date(m.date) }));
+    return hydrated.length > 0 ? hydrated : DEFAULT_MEETINGS;
+  });
 
   const [showNewMeeting, setShowNewMeeting] = useState(false);
   const [newMeeting, setNewMeeting] = useState({
@@ -56,6 +63,11 @@ export function Meetings({ onNewVideo }: MeetingsProps) {
     duration: '30',
     participants: '1'
   });
+
+  const saveMeetings = (updated: Meeting[]) => {
+    setMeetings(updated);
+    setStorageItem('meetings', updated);
+  };
 
   const upcomingMeetings = meetings.filter(m => m.status === 'upcoming').sort((a, b) => a.date.getTime() - b.date.getTime());
   const completedMeetings = meetings.filter(m => m.status === 'completed').sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -98,7 +110,7 @@ export function Meetings({ onNewVideo }: MeetingsProps) {
       status: 'upcoming'
     };
 
-    setMeetings([...meetings, meeting]);
+    saveMeetings([...meetings, meeting]);
     setShowNewMeeting(false);
     setNewMeeting({ title: '', date: '', time: '', duration: '30', participants: '1' });
   };
@@ -110,7 +122,7 @@ export function Meetings({ onNewVideo }: MeetingsProps) {
 
   const handleDeleteMeeting = (id: string) => {
     if (confirm('Delete this meeting?')) {
-      setMeetings(meetings.filter(m => m.id !== id));
+      saveMeetings(meetings.filter(m => m.id !== id));
     }
   };
 

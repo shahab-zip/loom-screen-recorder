@@ -167,6 +167,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_VIDEOS', payload: state.videos.map(v => v.id === video.id ? updatedVideo : v) });
     setStorageItem('recorded-videos', state.videos.map(v => v.id === video.id ? updatedVideo : v));
     dispatch({ type: 'SELECT_VIDEO', payload: updatedVideo });
+    // Log to watch history
+    const rawHistory = getStorageItem<Array<{ videoId: string; watchedAt: string; watchTime: number }>>('watch-history', []);
+    const entry = {
+      videoId: video.id,
+      watchedAt: new Date().toISOString(),
+      watchTime: 0,
+    };
+    setStorageItem('watch-history', [entry, ...rawHistory].slice(0, 500));
   }, [state.videos]);
 
   const handleDeleteVideo = useCallback((id: string) => {
