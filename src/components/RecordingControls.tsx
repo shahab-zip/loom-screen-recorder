@@ -75,7 +75,7 @@ export function RecordingControls({
               onClick={onPause}
               onMouseEnter={() => setShowTooltip('pause')}
               onMouseLeave={() => setShowTooltip(null)}
-              className="relative group p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all duration-200 hover:scale-105 transform"
+              className={`relative group p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all duration-200 hover:scale-105 transform ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
               title={isPaused ? 'Resume' : 'Pause'}
               disabled={isSaving}
             >
@@ -97,7 +97,7 @@ export function RecordingControls({
               onClick={() => setIsMuted(!isMuted)}
               onMouseEnter={() => setShowTooltip('mute')}
               onMouseLeave={() => setShowTooltip(null)}
-              className="relative group p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all duration-200 hover:scale-105 transform"
+              className={`relative group p-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all duration-200 hover:scale-105 transform ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
               title={isMuted ? 'Unmute' : 'Mute'}
               disabled={isSaving}
             >
@@ -124,7 +124,7 @@ export function RecordingControls({
                   isAnnotating
                     ? 'bg-red-600 text-white shadow-lg'
                     : 'bg-gray-800 hover:bg-gray-700 text-white'
-                }`}
+                } ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title="Annotations"
                 disabled={isSaving}
               >
@@ -146,7 +146,7 @@ export function RecordingControls({
               onClick={handleCancel}
               onMouseEnter={() => setShowTooltip('cancel')}
               onMouseLeave={() => setShowTooltip(null)}
-              className="relative group p-2 bg-gray-800 hover:bg-red-700 rounded-lg transition-all duration-200 hover:scale-105 transform"
+              className={`relative group p-2 bg-gray-800 hover:bg-red-700 rounded-lg transition-all duration-200 hover:scale-105 transform ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
               title="Cancel Recording"
               disabled={isSaving}
             >

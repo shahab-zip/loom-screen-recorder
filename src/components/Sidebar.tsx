@@ -174,8 +174,8 @@ export const Sidebar = memo(function Sidebar({
 
                 {showWorkspaceDropdown && (
                   <>
-                    <div className="fixed inset-0 z-20" onClick={() => setShowWorkspaceDropdown(false)} />
-                    <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden">
+                    <div className="fixed inset-0 z-40" onClick={() => setShowWorkspaceDropdown(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-40 overflow-hidden">
                       <div className="p-1.5 max-h-48 overflow-y-auto">
                         {workspaces.map(ws => (
                           <button
