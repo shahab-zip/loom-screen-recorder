@@ -132,13 +132,17 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = videoRef.current;
+    if (!v) return;
     const t = parseFloat(e.target.value);
-    if (videoRef.current) videoRef.current.currentTime = t;
+    v.currentTime = t;
     setCurrentTime(t);
   };
 
   const handleSpeedChange = (speed: number) => {
-    if (videoRef.current) videoRef.current.playbackRate = speed;
+    const v = videoRef.current;
+    if (!v) return;
+    v.playbackRate = speed;
     setPlaybackSpeed(speed);
     setShowSpeedMenu(false);
   };
@@ -159,18 +163,20 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   };
 
   const replayVideo = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      videoRef.current.play().catch(() => {});
-      setIsPlaying(true);
-      resetControlsTimer();
-    }
+    const v = videoRef.current;
+    if (!v) return;
+    v.currentTime = 0;
+    v.play().catch(() => {});
+    setIsPlaying(true);
+    resetControlsTimer();
   };
 
   const skipTime = (secs: number) => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.max(0, Math.min(duration, currentTime + secs));
-    }
+    const v = videoRef.current;
+    if (!v) return;
+    const newTime = Math.max(0, Math.min(duration, v.currentTime + secs));
+    v.currentTime = newTime;
+    setCurrentTime(newTime); // Force immediate re-render of progress bar
   };
 
   // ── Keyboard shortcuts ───────────────────────────────
@@ -227,10 +233,14 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
 
   // ── Copy link ─────────────────────────────────────────
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    });
+    navigator.clipboard.writeText(window.location.href)
+      .then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      })
+      .catch(() => {
+        console.warn('Clipboard write failed');
+      });
   };
 
   // ── Title editing ─────────────────────────────────────
