@@ -294,13 +294,44 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
       });
     }
 
-    // Demo mode fallback
+    // Demo mode: generate a minimal but playable placeholder
     stopAllStreams();
     const thumbnail = generatePlaceholderThumbnail(finalDuration || 5);
-    const demoBlob = new Blob([''], { type: 'video/webm' });
-    const url = URL.createObjectURL(demoBlob);
 
-    return { url, duration: Math.max(finalDuration, 1), thumbnail };
+    // Create a canvas-based placeholder video blob
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      gradient.addColorStop(0, '#1a1a2e');
+      gradient.addColorStop(1, '#16213e');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Demo Recording', canvas.width / 2, canvas.height / 2 - 10);
+      ctx.font = '16px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('Screen capture permission was denied', canvas.width / 2, canvas.height / 2 + 20);
+    }
+    const stream = canvas.captureStream(1);
+    const demoRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    const demoChunks: Blob[] = [];
+    demoRecorder.ondataavailable = (e) => { if (e.data.size > 0) demoChunks.push(e.data); };
+
+    return new Promise<RecordingResult>((resolve) => {
+      demoRecorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(demoChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        resolve({ url, duration: Math.max(finalDuration, 1), thumbnail });
+      };
+      demoRecorder.start();
+      setTimeout(() => demoRecorder.stop(), 200);
+    });
   }, []);
 
   const pauseRecording = useCallback(() => {
