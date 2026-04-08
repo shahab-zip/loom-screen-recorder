@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(ls -la '/Users/shifu/Documents/Claude/Loom-like Tool Design/.git/index'*)",
+      "Bash(GIT_DIR=\"/Users/shifu/Documents/Claude/Loom-like Tool Design/.git\" GIT_WORK_TREE=\"/Users/shifu/Documents/Claude/Loom-like Tool Design\" git add src/components/Sidebar.tsx src/components/RecordingControls.tsx)",
+      "Bash(git commit -m 'fix: sidebar z-index, disable all controls during save:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

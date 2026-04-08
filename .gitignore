@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+extension/node_modules/
+
+# Build outputs - keep extension/dist and build/ as they are intentionally committed
+# Uncomment below if you want to exclude build outputs:
+# build/
+# extension/dist/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Editor directories and files
+.DS_Store
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript build info
+*.tsbuildinfo

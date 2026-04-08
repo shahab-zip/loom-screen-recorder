@@ -1,0 +1,5 @@
+/* Fallback styles — most styles are in Shadow DOM */
+#loom-recorder-widget {
+  position: fixed !important;
+  z-index: 2147483647 !important;
+}
