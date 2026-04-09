@@ -16,13 +16,13 @@ const recCount      = document.getElementById('rec-count')!;
 const recordingsList = document.getElementById('recordings-list')!;
 const cameraSelect  = document.getElementById('cameraSelect') as HTMLSelectElement;
 const micSelect     = document.getElementById('micSelect') as HTMLSelectElement;
-const cameraToggle  = document.getElementById('cameraToggle') as HTMLInputElement;
-const micToggle     = document.getElementById('micToggle') as HTMLInputElement;
-const countdownToggle = document.getElementById('countdownToggle') as HTMLInputElement;
+const cameraToggle  = document.getElementById('cameraToggle')!;
+const micToggle     = document.getElementById('micToggle')!;
+const countdownToggle = document.getElementById('countdownToggle')!;
 const openAppBtn    = document.getElementById('openAppBtn')!;
 
 // ── State ──
-let currentMode: 'screen' | 'screen-camera' | 'screenshot' = 'screen';
+let currentMode: 'screen' | 'screen-camera' = 'screen';
 let countdownInterval: ReturnType<typeof setInterval> | null = null;
 let recState: RecordingState | null = null;
 
@@ -32,12 +32,28 @@ function fmt(s: number): string {
 }
 
 function showView(v: 'idle' | 'countdown' | 'recording') {
-  idleView.classList.toggle('hidden', v !== 'idle');
-  countdownView.classList.toggle('hidden', v !== 'countdown');
-  recordingView.classList.toggle('hidden', v !== 'recording');
+  idleView.classList.toggle('view-hidden', v !== 'idle');
+  countdownView.classList.toggle('view-hidden', v !== 'countdown');
+  recordingView.classList.toggle('view-hidden', v !== 'recording');
 }
 
-// ── Devices ──
+function isOn(el: HTMLElement): boolean {
+  return el.dataset.on === 'true';
+}
+
+function toggleEl(el: HTMLElement) {
+  const next = !isOn(el);
+  el.dataset.on = String(next);
+  el.classList.toggle('on', next);
+  el.classList.toggle('off', !next);
+}
+
+// ── Toggle buttons ──
+[cameraToggle, micToggle, countdownToggle, document.getElementById('hdToggle')!].forEach(btn => {
+  btn.addEventListener('click', () => toggleEl(btn));
+});
+
+// ── Device enumeration ──
 async function loadDevices() {
   try {
     await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
@@ -62,12 +78,14 @@ async function loadDevices() {
   } catch (_) { /* ignore */ }
 }
 
-// ── Mode tabs ──
-document.querySelectorAll('.mode').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.mode').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentMode = (btn as HTMLElement).dataset.mode as typeof currentMode;
+// ── Mode cards ──
+document.querySelectorAll('.mode-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    currentMode = (card as HTMLElement).dataset.mode as typeof currentMode;
+
+    // Dim camera row when screen-only
     const row = document.getElementById('cameraRow')!;
     row.style.opacity = currentMode === 'screen' ? '0.4' : '1';
     row.style.pointerEvents = currentMode === 'screen' ? 'none' : 'auto';
@@ -96,34 +114,26 @@ cancelCdBtn.addEventListener('click', () => {
   showView('idle');
 });
 
-// ── Start ──
+// ── Start recording ──
 function go() {
-  const mode = currentMode === 'screenshot' ? 'screen' : currentMode;
-  chrome.runtime.sendMessage({ type: 'START_RECORDING', mode });
+  chrome.runtime.sendMessage({ type: 'START_RECORDING', mode: currentMode });
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
     if (tabs[0]?.id) {
       chrome.tabs.sendMessage(tabs[0].id, {
         type: 'START_CAPTURE',
-        mode,
-        useCamera: cameraToggle.checked && currentMode === 'screen-camera',
-        useMic: micToggle.checked,
+        mode: currentMode,
+        useCamera: isOn(cameraToggle) && currentMode === 'screen-camera',
+        useMic: isOn(micToggle),
       });
     }
   });
-  recModeBadge.textContent = currentMode === 'screen-camera' ? 'Cam' : 'Screen';
+  recModeBadge.textContent = currentMode === 'screen-camera' ? 'Screen + Cam' : 'Screen';
   showView('recording');
   window.close();
 }
 
 startBtn.addEventListener('click', () => {
-  if (currentMode === 'screenshot') {
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-      if (tabs[0]?.id) chrome.tabs.sendMessage(tabs[0].id, { type: 'TAKE_SCREENSHOT' });
-    });
-    window.close();
-    return;
-  }
-  countdownToggle.checked ? countdown(go) : go();
+  isOn(countdownToggle) ? countdown(go) : go();
 });
 
 // ── Recording controls ──
@@ -135,19 +145,19 @@ stopBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'STOP
 cancelRecBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'CANCEL_RECORDING' }));
 openAppBtn.addEventListener('click', () => chrome.tabs.create({ url: 'http://localhost:3001' }));
 
-// ── Render ──
+// ── Render recordings ──
 function renderRecs(list: SavedRecording[]) {
   recCount.textContent = String(list.length);
   if (!list.length) {
-    recordingsList.innerHTML = '<p class="empty">No recordings yet</p>';
+    recordingsList.innerHTML = '<div class="recents-empty">No recordings yet</div>';
     return;
   }
-  recordingsList.innerHTML = list.slice(0, 6).map(r => `
+  recordingsList.innerHTML = list.slice(0, 5).map(r => `
     <div class="rec-item" data-id="${r.id}">
-      ${r.thumbnail ? `<img class="rec-item-thumb" src="${r.thumbnail}" alt="">` : '<div class="rec-item-thumb"></div>'}
-      <div class="rec-item-info">
-        <div class="rec-item-title">${r.title}</div>
-        <div class="rec-item-meta">${fmt(r.duration)}</div>
+      ${r.thumbnail ? `<img class="rec-thumb" src="${r.thumbnail}" alt="">` : '<div class="rec-thumb"></div>'}
+      <div class="rec-info">
+        <div class="rec-title">${r.title}</div>
+        <div class="rec-meta">${fmt(r.duration)}</div>
       </div>
     </div>
   `).join('');
@@ -158,9 +168,10 @@ function apply(s: RecordingState) {
   if (s.isRecording) {
     showView('recording');
     recTimer.textContent = fmt(s.duration);
-    pauseBtn.innerHTML = s.isPaused
-      ? '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>Resume'
-      : '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>Pause';
+    const pauseIcon = s.isPaused
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg><span>Resume</span>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>';
+    pauseBtn.innerHTML = pauseIcon;
   } else if (!countdownInterval) {
     showView('idle');
   }
