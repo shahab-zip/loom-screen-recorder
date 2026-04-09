@@ -4,6 +4,7 @@ import type { RecordingState, SavedRecording } from '../shared/types';
 const idleView      = document.getElementById('idle-view')!;
 const countdownView = document.getElementById('countdown-view')!;
 const recordingView = document.getElementById('recording-view')!;
+const recentsView   = document.getElementById('recents-view')!;
 const startBtn      = document.getElementById('startBtn')!;
 const pauseBtn      = document.getElementById('pauseBtn')!;
 const stopBtn       = document.getElementById('stopBtn')!;
@@ -18,40 +19,91 @@ const cameraSelect  = document.getElementById('cameraSelect') as HTMLSelectEleme
 const micSelect     = document.getElementById('micSelect') as HTMLSelectElement;
 const cameraToggle  = document.getElementById('cameraToggle')!;
 const micToggle     = document.getElementById('micToggle')!;
-const countdownToggle = document.getElementById('countdownToggle')!;
-const openAppBtn    = document.getElementById('openAppBtn')!;
+const countdownBtn  = document.getElementById('countdownToggle')!;
+const audioBar      = document.getElementById('audioBar')!;
+const homeBtn       = document.getElementById('homeBtn')!;
+const closeBtn      = document.getElementById('closeBtn')!;
 
 // ── State ──
 let currentMode: 'screen' | 'screen-camera' = 'screen';
 let countdownInterval: ReturnType<typeof setInterval> | null = null;
 let recState: RecordingState | null = null;
+let audioCtx: AudioContext | null = null;
+let analyser: AnalyserNode | null = null;
+let micStream: MediaStream | null = null;
 
 // ── Helpers ──
 function fmt(s: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function showView(v: 'idle' | 'countdown' | 'recording') {
+function showView(v: 'idle' | 'countdown' | 'recording' | 'recents') {
   idleView.classList.toggle('view-hidden', v !== 'idle');
   countdownView.classList.toggle('view-hidden', v !== 'countdown');
   recordingView.classList.toggle('view-hidden', v !== 'recording');
+  recentsView.classList.toggle('view-hidden', v !== 'recents');
+
+  // Update nav active state
+  document.querySelectorAll('.nav-icon').forEach(n => n.classList.remove('active'));
+  if (v === 'recents') homeBtn.classList.add('active');
+  else if (v === 'idle') document.getElementById(currentMode === 'screen' ? 'videoBtn' : 'camBtn')!.classList.add('active');
 }
 
-function isOn(el: HTMLElement): boolean {
-  return el.dataset.on === 'true';
+// ── Pill badge toggle ──
+function togglePill(el: HTMLElement) {
+  const isOn = el.classList.contains('on');
+  el.classList.toggle('on', !isOn);
+  el.classList.toggle('off', isOn);
+  el.textContent = isOn ? 'Off' : 'On';
 }
-
-function toggleEl(el: HTMLElement) {
-  const next = !isOn(el);
-  el.dataset.on = String(next);
-  el.classList.toggle('on', next);
-  el.classList.toggle('off', !next);
-}
-
-// ── Toggle buttons ──
-[cameraToggle, micToggle, countdownToggle, document.getElementById('hdToggle')!].forEach(btn => {
-  btn.addEventListener('click', () => toggleEl(btn));
+cameraToggle.addEventListener('click', () => togglePill(cameraToggle));
+micToggle.addEventListener('click', () => {
+  togglePill(micToggle);
+  if (micToggle.classList.contains('on')) startAudioMeter();
+  else stopAudioMeter();
 });
+
+// ── Bottom bar toggles ──
+[countdownBtn, document.getElementById('hdToggle')!].forEach(btn => {
+  btn.addEventListener('click', () => {
+    const isOn = btn.dataset.on === 'true';
+    btn.dataset.on = String(!isOn);
+    const dot = btn.querySelector('.bar-dot');
+    if (dot) dot.classList.toggle('on', !isOn);
+  });
+});
+
+// ── Audio level meter ──
+function startAudioMeter() {
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    micStream = stream;
+    audioCtx = new AudioContext();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    const src = audioCtx.createMediaStreamSource(stream);
+    src.connect(analyser);
+    animateAudio();
+  }).catch(() => {});
+}
+
+function animateAudio() {
+  if (!analyser) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  const avg = data.reduce((a, b) => a + b, 0) / data.length;
+  const pct = Math.min(100, (avg / 128) * 100);
+  audioBar.style.width = `${Math.max(4, pct)}%`;
+  requestAnimationFrame(animateAudio);
+}
+
+function stopAudioMeter() {
+  micStream?.getTracks().forEach(t => t.stop());
+  micStream = null;
+  audioCtx?.close();
+  audioCtx = null;
+  analyser = null;
+  audioBar.style.width = '0%';
+}
 
 // ── Device enumeration ──
 async function loadDevices() {
@@ -75,22 +127,42 @@ async function loadDevices() {
       o.textContent = m.label || `Mic ${i + 1}`;
       micSelect.appendChild(o);
     });
+
+    // Start audio meter if mic is on
+    if (micToggle.classList.contains('on')) startAudioMeter();
   } catch (_) { /* ignore */ }
 }
 
-// ── Mode cards ──
-document.querySelectorAll('.mode-card').forEach(card => {
-  card.addEventListener('click', () => {
-    document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
-    card.classList.add('selected');
-    currentMode = (card as HTMLElement).dataset.mode as typeof currentMode;
+// ── Nav mode switching ──
+const videoBtn = document.getElementById('videoBtn')!;
+const camBtn = document.getElementById('camBtn')!;
 
-    // Dim camera row when screen-only
-    const row = document.getElementById('cameraRow')!;
-    row.style.opacity = currentMode === 'screen' ? '0.4' : '1';
-    row.style.pointerEvents = currentMode === 'screen' ? 'none' : 'auto';
-  });
+videoBtn.addEventListener('click', () => {
+  currentMode = 'screen';
+  showView('idle');
+  videoBtn.classList.add('active');
+  camBtn.classList.remove('active');
+  const row = document.getElementById('cameraRow')!;
+  row.style.opacity = '0.4';
+  row.style.pointerEvents = 'none';
 });
+
+camBtn.addEventListener('click', () => {
+  currentMode = 'screen-camera';
+  showView('idle');
+  camBtn.classList.add('active');
+  videoBtn.classList.remove('active');
+  const row = document.getElementById('cameraRow')!;
+  row.style.opacity = '1';
+  row.style.pointerEvents = 'auto';
+});
+
+homeBtn.addEventListener('click', () => showView('recents'));
+closeBtn.addEventListener('click', () => window.close());
+
+// Init camera row dimmed for screen mode
+document.getElementById('cameraRow')!.style.opacity = '0.4';
+document.getElementById('cameraRow')!.style.pointerEvents = 'none';
 
 // ── Countdown ──
 function countdown(done: () => void) {
@@ -108,7 +180,6 @@ function countdown(done: () => void) {
     }
   }, 1000);
 }
-
 cancelCdBtn.addEventListener('click', () => {
   if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
   showView('idle');
@@ -116,14 +187,15 @@ cancelCdBtn.addEventListener('click', () => {
 
 // ── Start recording ──
 function go() {
+  stopAudioMeter();
   chrome.runtime.sendMessage({ type: 'START_RECORDING', mode: currentMode });
   chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
     if (tabs[0]?.id) {
       chrome.tabs.sendMessage(tabs[0].id, {
         type: 'START_CAPTURE',
         mode: currentMode,
-        useCamera: isOn(cameraToggle) && currentMode === 'screen-camera',
-        useMic: isOn(micToggle),
+        useCamera: cameraToggle.classList.contains('on') && currentMode === 'screen-camera',
+        useMic: micToggle.classList.contains('on'),
       });
     }
   });
@@ -133,7 +205,7 @@ function go() {
 }
 
 startBtn.addEventListener('click', () => {
-  isOn(countdownToggle) ? countdown(go) : go();
+  countdownBtn.dataset.on === 'true' ? countdown(go) : go();
 });
 
 // ── Recording controls ──
@@ -143,7 +215,10 @@ pauseBtn.addEventListener('click', () => {
 });
 stopBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'STOP_RECORDING' }));
 cancelRecBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'CANCEL_RECORDING' }));
-openAppBtn.addEventListener('click', () => chrome.tabs.create({ url: 'http://localhost:3001' }));
+
+// Open app buttons
+document.getElementById('openAppBtn2')?.addEventListener('click', () => chrome.tabs.create({ url: 'http://localhost:3001' }));
+document.getElementById('moreBtn')?.addEventListener('click', () => chrome.tabs.create({ url: 'http://localhost:3001' }));
 
 // ── Render recordings ──
 function renderRecs(list: SavedRecording[]) {
@@ -152,7 +227,7 @@ function renderRecs(list: SavedRecording[]) {
     recordingsList.innerHTML = '<div class="recents-empty">No recordings yet</div>';
     return;
   }
-  recordingsList.innerHTML = list.slice(0, 5).map(r => `
+  recordingsList.innerHTML = list.slice(0, 8).map(r => `
     <div class="rec-item" data-id="${r.id}">
       ${r.thumbnail ? `<img class="rec-thumb" src="${r.thumbnail}" alt="">` : '<div class="rec-thumb"></div>'}
       <div class="rec-info">
@@ -168,10 +243,9 @@ function apply(s: RecordingState) {
   if (s.isRecording) {
     showView('recording');
     recTimer.textContent = fmt(s.duration);
-    const pauseIcon = s.isPaused
-      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg><span>Resume</span>'
-      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>';
-    pauseBtn.innerHTML = pauseIcon;
+    pauseBtn.innerHTML = s.isPaused
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg><span>Resume</span>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg><span>Pause</span>';
   } else if (!countdownInterval) {
     showView('idle');
   }
