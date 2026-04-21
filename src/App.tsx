@@ -4,6 +4,7 @@ import { useScreenRecorder } from './hooks/useScreenRecorder';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Sidebar } from './components/Sidebar';
 import { AuthGuard } from './components/auth/AuthGuard';
+import { RouteGuard } from './components/auth/RouteGuard';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { AnnotationToolbar, type AnnotationTool } from './components/AnnotationToolbar';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from './components/AnnotationCanvas';
@@ -171,9 +172,10 @@ function AppContent() {
 
     switch (currentView) {
       case 'for-you':
-        return <ForYou videos={filteredVideos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} />;
+        return <RouteGuard permission="video:view"><ForYou videos={filteredVideos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} /></RouteGuard>;
       case 'library':
         return (
+          <RouteGuard permission="video:view">
           <VideoLibrary
             videos={filteredVideos}
             onVideoClick={handleVideoClick}
@@ -185,23 +187,24 @@ function AppContent() {
             sortType={sortType}
             onSortTypeChange={setSortType}
           />
+          </RouteGuard>
         );
       case 'meetings':
-        return <Meetings onNewVideo={openRecordingModal} />;
+        return <RouteGuard permission="video:view"><Meetings onNewVideo={openRecordingModal} /></RouteGuard>;
       case 'watch-later':
-        return <WatchLater videos={videos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} />;
+        return <RouteGuard permission="video:view"><WatchLater videos={videos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} /></RouteGuard>;
       case 'history':
-        return <History videos={videos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} />;
+        return <RouteGuard permission="video:view"><History videos={videos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} /></RouteGuard>;
       case 'settings':
         return <Settings onNewVideo={openRecordingModal} />;
       case 'manage':
-        return <ManagePage />;
+        return <RouteGuard permission="member:view"><ManagePage /></RouteGuard>;
       case 'workspace-settings':
-        return <WorkspaceSettingsPage />;
+        return <RouteGuard permission="workspace:view-settings"><WorkspaceSettingsPage /></RouteGuard>;
       case 'billing':
-        return <BillingPage />;
+        return <RouteGuard permission="workspace:view-billing"><BillingPage /></RouteGuard>;
       case 'spaces':
-        return <SpacesPage />;
+        return <RouteGuard permission="space:create"><SpacesPage /></RouteGuard>;
       default:
         return null;
     }

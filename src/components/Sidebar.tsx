@@ -7,6 +7,7 @@ import { useState, memo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { RoleGuard } from './auth/RoleGuard';
+import { RequirePermission } from './auth/RequirePermission';
 import { InviteModal } from './auth/InviteModal';
 import { ROLE_LABELS, ROLE_COLORS } from '../lib/auth-types';
 import type { CurrentView } from '../lib/types';
@@ -259,7 +260,7 @@ export const Sidebar = memo(function Sidebar({
                 </div>
                 <nav className="px-2 pb-2 space-y-0.5">
                   {/* Manage (expandable) */}
-                  <RoleGuard permission="workspace:manage-members">
+                  <RequirePermission permission="member:view">
                     <button
                       onClick={() => setManageExpanded(!manageExpanded)}
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-gray-600 hover:bg-gray-50 hover:text-gray-900 group"
@@ -276,11 +277,13 @@ export const Sidebar = memo(function Sidebar({
                         indent
                       />
                     )}
-                  </RoleGuard>
-                  <NavItem id={'workspace-settings' as CurrentView} label="Workspace" icon={Briefcase} />
-                  <RoleGuard permission="workspace:view-billing">
+                  </RequirePermission>
+                  <RequirePermission permission="workspace:view-settings">
+                    <NavItem id={'workspace-settings' as CurrentView} label="Workspace" icon={Briefcase} />
+                  </RequirePermission>
+                  <RequirePermission permission="workspace:view-billing">
                     <NavItem id={'billing' as CurrentView} label="Billing" icon={CreditCard} external />
-                  </RoleGuard>
+                  </RequirePermission>
                 </nav>
               </RoleGuard>
 
@@ -355,8 +358,12 @@ export const Sidebar = memo(function Sidebar({
           {/* Collapsed: show icons for admin tools */}
           {isCollapsed && (
             <nav className="px-2 pt-1 pb-4 space-y-0.5 border-t border-gray-100 mt-1">
-              <NavItem label="Workspace" icon={Briefcase} onClick={() => onViewChange('workspace-settings' as CurrentView)} />
-              <NavItem label="Billing" icon={CreditCard} onClick={() => onViewChange('billing' as CurrentView)} />
+              <RequirePermission permission="workspace:view-settings">
+                <NavItem label="Workspace" icon={Briefcase} onClick={() => onViewChange('workspace-settings' as CurrentView)} />
+              </RequirePermission>
+              <RequirePermission permission="workspace:view-billing">
+                <NavItem label="Billing" icon={CreditCard} onClick={() => onViewChange('billing' as CurrentView)} />
+              </RequirePermission>
             </nav>
           )}
         </div>
