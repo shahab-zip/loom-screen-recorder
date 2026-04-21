@@ -130,17 +130,50 @@ export function createWidget() {
         : '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
     },
 
-    async startCapture(mode: 'screen' | 'screen-camera') {
+    async startCapture(
+      mode: 'screen' | 'screen-camera',
+      opts: { useMic?: boolean; micId?: string; quality?: 'SD' | 'HD' | '4K' } = {},
+    ) {
       try {
+        const qualityMap = {
+          SD: { width: 1280, height: 720, frameRate: 24, bitsPerSecond: 2_000_000 },
+          HD: { width: 1920, height: 1080, frameRate: 30, bitsPerSecond: 5_000_000 },
+          '4K': { width: 3840, height: 2160, frameRate: 30, bitsPerSecond: 15_000_000 },
+        };
+        const q = qualityMap[opts.quality || 'HD'];
+
         stream = await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: 30 },
+          video: { frameRate: q.frameRate, width: q.width, height: q.height },
           audio: true,
         });
+
+        // Mix in mic audio if requested
+        if (opts.useMic) {
+          try {
+            const micStream = await navigator.mediaDevices.getUserMedia({
+              audio: opts.micId ? { deviceId: { exact: opts.micId } } : true,
+            });
+            const ac = new AudioContext();
+            const dest = ac.createMediaStreamDestination();
+            const sysTracks = stream.getAudioTracks();
+            if (sysTracks.length) {
+              ac.createMediaStreamSource(new MediaStream([sysTracks[0]])).connect(dest);
+            }
+            ac.createMediaStreamSource(micStream).connect(dest);
+            // Replace audio with the mixed track
+            sysTracks.forEach(t => stream!.removeTrack(t));
+            stream.addTrack(dest.stream.getAudioTracks()[0]);
+          } catch { /* mic denied */ }
+        }
+
         chunks = [];
         const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm'].find(
           t => MediaRecorder.isTypeSupported(t)
         ) || '';
-        mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        mediaRecorder = new MediaRecorder(stream, {
+          ...(mimeType ? { mimeType } : {}),
+          videoBitsPerSecond: q.bitsPerSecond,
+        });
         mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) chunks.push(e.data);
         };

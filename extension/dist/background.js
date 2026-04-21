@@ -58,6 +58,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       saveRecording(message.recording).then(() => {
         resetState();
         broadcastState();
+        getRecordings().then((recs) => {
+          chrome.runtime.sendMessage({ type: "RECORDINGS_LIST", recordings: recs }).catch(() => {
+          });
+        });
+        chrome.tabs.query({}, (tabs) => {
+          const appTab = tabs.find((t) => t.url && (t.url.startsWith("http://localhost:3000") || t.url.startsWith("http://localhost:3001") || t.url.startsWith("http://127.0.0.1:3000") || t.url.startsWith("http://127.0.0.1:3001")));
+          if (appTab?.id) {
+            chrome.tabs.sendMessage(appTab.id, {
+              type: "IMPORT_RECORDING_INTO_APP",
+              recording: message.recording
+            }).catch(() => {
+            });
+          }
+        });
+        try {
+          chrome.notifications?.create({
+            type: "basic",
+            iconUrl: "icons/icon128.png",
+            title: "Recording saved",
+            message: message.recording.title
+          });
+        } catch {
+        }
         sendResponse({ ok: true });
       });
       return true;

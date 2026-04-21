@@ -1,45 +1,21 @@
 import { useState, useMemo } from 'react';
 import {
   Users, UserPlus, Search, MoreHorizontal, Shield, Crown,
-  Eye, Trash2, Check, X, Mail, ChevronDown, Filter,
+  Eye, Trash2, Check, X, Filter,
 } from 'lucide-react';
-
-type Role = 'Owner' | 'Admin' | 'Member' | 'Viewer';
-type Status = 'Active' | 'Pending' | 'Deactivated';
-
-interface Member {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  status: Status;
-  avatar: string;
-  joinedAt: string;
-  lastSeen: string;
-  videosCreated: number;
-}
-
-const ROLE_COLORS: Record<Role, string> = {
-  Owner:  'bg-violet-100 text-violet-700',
-  Admin:  'bg-blue-100 text-blue-700',
-  Member: 'bg-green-100 text-green-700',
-  Viewer: 'bg-gray-100 text-gray-600',
-};
+import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useAuth } from '../contexts/AuthContext';
+import { InviteModal } from './auth/InviteModal';
+import { ROLE_LABELS, ROLE_COLORS } from '../lib/auth-types';
+import { getAssignableRoles, canManageRole } from '../lib/permissions';
+import type { Role } from '../lib/auth-types';
 
 const ROLE_ICONS: Record<Role, React.ComponentType<{ className?: string }>> = {
-  Owner:  Crown,
-  Admin:  Shield,
-  Member: Users,
-  Viewer: Eye,
+  owner: Crown,
+  admin: Shield,
+  member: Users,
+  viewer: Eye,
 };
-
-const MOCK_MEMBERS: Member[] = [
-  { id: '1', name: 'You', email: 'you@company.com', role: 'Owner', status: 'Active', avatar: 'YO', joinedAt: 'Jan 1, 2024', lastSeen: 'Just now', videosCreated: 42 },
-  { id: '2', name: 'Alex Rivera', email: 'alex@company.com', role: 'Admin', status: 'Active', avatar: 'AR', joinedAt: 'Feb 14, 2024', lastSeen: '2h ago', videosCreated: 28 },
-  { id: '3', name: 'Jordan Kim', email: 'jordan@company.com', role: 'Member', status: 'Active', avatar: 'JK', joinedAt: 'Mar 5, 2024', lastSeen: '1d ago', videosCreated: 15 },
-  { id: '4', name: 'Sam Chen', email: 'sam@company.com', role: 'Member', status: 'Pending', avatar: 'SC', joinedAt: '—', lastSeen: 'Never', videosCreated: 0 },
-  { id: '5', name: 'Morgan Lee', email: 'morgan@company.com', role: 'Viewer', status: 'Active', avatar: 'ML', joinedAt: 'Apr 20, 2024', lastSeen: '3d ago', videosCreated: 0 },
-];
 
 const AVATAR_COLORS = [
   'bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500',
@@ -47,63 +23,46 @@ const AVATAR_COLORS = [
 ];
 
 export function ManagePage() {
-  const [members, setMembers] = useState<Member[]>(MOCK_MEMBERS);
+  const { getWorkspaceMembers, getWorkspaceInvites, changeMemberRole, removeMember, cancelInvite, currentRole, state: wsState, can } = useWorkspace();
+  const { state: authState } = useAuth();
+
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<Role | 'All'>('All');
+  const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<Role>('Member');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [inviteSent, setInviteSent] = useState(false);
+
+  const members = getWorkspaceMembers(wsState.currentWorkspaceId);
+  const pendingInvites = getWorkspaceInvites(wsState.currentWorkspaceId);
 
   const filtered = useMemo(() => {
     return members.filter(m => {
-      const matchSearch = m.name.toLowerCase().includes(search.toLowerCase()) ||
-        m.email.toLowerCase().includes(search.toLowerCase());
-      const matchRole = roleFilter === 'All' || m.role === roleFilter;
+      if (m.status === 'deactivated') return false;
+      const matchSearch = (m.user?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (m.user?.email || '').toLowerCase().includes(search.toLowerCase());
+      const matchRole = roleFilter === 'all' || m.role === roleFilter;
       return matchSearch && matchRole;
     });
   }, [members, search, roleFilter]);
 
-  const handleRoleChange = (id: string, role: Role) => {
-    setMembers(prev => prev.map(m => m.id === id ? { ...m, role } : m));
+  const handleRoleChange = (userId: string, newRole: Role) => {
+    changeMemberRole(userId, wsState.currentWorkspaceId, newRole);
     setOpenMenuId(null);
   };
 
-  const handleRemove = (id: string) => {
+  const handleRemove = (userId: string) => {
     if (confirm('Remove this member from the workspace?')) {
-      setMembers(prev => prev.filter(m => m.id !== id));
+      removeMember(userId, wsState.currentWorkspaceId);
     }
     setOpenMenuId(null);
   };
 
-  const handleInvite = () => {
-    if (!inviteEmail.trim() || !inviteEmail.includes('@')) return;
-    const newMember: Member = {
-      id: Date.now().toString(),
-      name: inviteEmail.split('@')[0],
-      email: inviteEmail.trim(),
-      role: inviteRole,
-      status: 'Pending',
-      avatar: inviteEmail.slice(0, 2).toUpperCase(),
-      joinedAt: '—',
-      lastSeen: 'Never',
-      videosCreated: 0,
-    };
-    setMembers(prev => [...prev, newMember]);
-    setInviteSent(true);
-    setTimeout(() => {
-      setInviteSent(false);
-      setInviteEmail('');
-      setShowInviteModal(false);
-    }, 1500);
+  const counts = {
+    total: members.filter(m => m.status !== 'deactivated').length,
+    active: members.filter(m => m.status === 'active').length,
+    pending: pendingInvites.length,
   };
 
-  const counts = {
-    total: members.length,
-    active: members.filter(m => m.status === 'Active').length,
-    pending: members.filter(m => m.status === 'Pending').length,
-  };
+  const assignableRoles = currentRole ? getAssignableRoles(currentRole) : [];
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -115,13 +74,15 @@ export function ManagePage() {
             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Manage Users</h1>
             <p className="text-sm text-gray-500 mt-1">Control who has access to your workspace</p>
           </div>
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-all shadow-sm hover:shadow-md"
-          >
-            <UserPlus className="w-4 h-4" />
-            Invite member
-          </button>
+          {can('member:invite') && (
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-all shadow-sm hover:shadow-md"
+            >
+              <UserPlus className="w-4 h-4" />
+              Invite member
+            </button>
+          )}
         </div>
 
         {/* Stats row */}
@@ -144,7 +105,7 @@ export function ManagePage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search members…"
+              placeholder="Search members..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 bg-white"
@@ -154,14 +115,14 @@ export function ManagePage() {
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
             <select
               value={roleFilter}
-              onChange={e => setRoleFilter(e.target.value as Role | 'All')}
+              onChange={e => setRoleFilter(e.target.value as Role | 'all')}
               className="pl-8 pr-8 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-red-400 bg-white appearance-none"
             >
-              <option value="All">All roles</option>
-              <option value="Owner">Owner</option>
-              <option value="Admin">Admin</option>
-              <option value="Member">Member</option>
-              <option value="Viewer">Viewer</option>
+              <option value="all">All roles</option>
+              <option value="owner">Owner</option>
+              <option value="admin">Admin</option>
+              <option value="member">Member</option>
+              <option value="viewer">Viewer</option>
             </select>
           </div>
         </div>
@@ -174,80 +135,90 @@ export function ManagePage() {
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Member</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Role</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider hidden md:table-cell">Status</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Last seen</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Videos</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider hidden lg:table-cell">Joined</th>
                 <th className="px-5 py-3 w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map((member, idx) => {
                 const RoleIcon = ROLE_ICONS[member.role];
+                const memberName = member.user?.name || 'Unknown';
+                const memberEmail = member.user?.email || '';
+                const initials = memberName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                const isCurrentUser = member.userId === authState.currentUser?.id;
+                const canManage = currentRole && member.role !== 'owner' && canManageRole(currentRole, member.role);
+
                 return (
-                  <tr key={member.id} className="hover:bg-gray-50/50 transition-colors group">
+                  <tr key={member.userId} className="hover:bg-gray-50/50 transition-colors group">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${AVATAR_COLORS[idx % AVATAR_COLORS.length]}`}>
-                          {member.avatar}
+                          {initials}
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{member.name}</div>
-                          <div className="text-xs text-gray-400">{member.email}</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {memberName} {isCurrentUser && <span className="text-gray-400 font-normal">(you)</span>}
+                          </div>
+                          <div className="text-xs text-gray-400">{memberEmail}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${ROLE_COLORS[member.role]}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${ROLE_COLORS[member.role]}`}>
                         <RoleIcon className="w-3 h-3" />
-                        {member.role}
+                        {ROLE_LABELS[member.role]}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 hidden md:table-cell">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium ${
-                        member.status === 'Active' ? 'text-green-600' :
-                        member.status === 'Pending' ? 'text-yellow-600' : 'text-gray-400'
+                        member.status === 'active' ? 'text-green-600' :
+                        member.status === 'pending' ? 'text-yellow-600' : 'text-gray-400'
                       }`}>
                         <div className={`w-1.5 h-1.5 rounded-full ${
-                          member.status === 'Active' ? 'bg-green-500' :
-                          member.status === 'Pending' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-300'
+                          member.status === 'active' ? 'bg-green-500' :
+                          member.status === 'pending' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-300'
                         }`} />
-                        {member.status}
+                        {member.status.charAt(0).toUpperCase() + member.status.slice(1)}
                       </span>
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-500 hidden lg:table-cell">{member.lastSeen}</td>
-                    <td className="px-5 py-3.5 text-sm text-gray-500 hidden lg:table-cell">{member.videosCreated}</td>
+                    <td className="px-5 py-3.5 text-sm text-gray-500 hidden lg:table-cell">
+                      {new Date(member.joinedAt).toLocaleDateString()}
+                    </td>
                     <td className="px-5 py-3.5 relative">
-                      {member.role !== 'Owner' && (
+                      {canManage && !isCurrentUser && can('member:change-role') && (
                         <>
                           <button
-                            onClick={() => setOpenMenuId(openMenuId === member.id ? null : member.id)}
+                            onClick={() => setOpenMenuId(openMenuId === member.userId ? null : member.userId)}
                             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           >
                             <MoreHorizontal className="w-4 h-4 text-gray-500" />
                           </button>
-                          {openMenuId === member.id && (
+                          {openMenuId === member.userId && (
                             <>
                               <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
                               <div className="absolute right-4 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-20 py-1 w-44 overflow-hidden">
                                 <div className="px-3 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Change role</div>
-                                {(['Admin', 'Member', 'Viewer'] as Role[]).map(role => (
+                                {assignableRoles.map(role => (
                                   <button
                                     key={role}
-                                    onClick={() => handleRoleChange(member.id, role)}
+                                    onClick={() => handleRoleChange(member.userId, role)}
                                     className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 text-left"
                                   >
-                                    <span>{role}</span>
+                                    <span>{ROLE_LABELS[role]}</span>
                                     {member.role === role && <Check className="w-3.5 h-3.5 text-red-600" />}
                                   </button>
                                 ))}
-                                <div className="border-t border-gray-100 mt-1 pt-1">
-                                  <button
-                                    onClick={() => handleRemove(member.id)}
-                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    Remove
-                                  </button>
-                                </div>
+                                {can('member:remove') && (
+                                  <div className="border-t border-gray-100 mt-1 pt-1">
+                                    <button
+                                      onClick={() => handleRemove(member.userId)}
+                                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 text-left"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      Remove
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </>
                           )}
@@ -266,68 +237,36 @@ export function ManagePage() {
             </div>
           )}
         </div>
+
+        {/* Pending Invites */}
+        {pendingInvites.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              Pending Invites ({pendingInvites.length})
+            </h3>
+            {pendingInvites.map(invite => (
+              <div key={invite.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-white mb-2 shadow-sm">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{invite.email}</p>
+                  <p className="text-xs text-gray-500">
+                    Invited as {ROLE_LABELS[invite.role]} &middot; Expires {new Date(invite.expiresAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => cancelInvite(invite.id)}
+                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancel
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Invite modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-base font-bold text-gray-900">Invite a team member</h2>
-              <button onClick={() => setShowInviteModal(false)} className="p-1.5 hover:bg-gray-100 rounded-lg">
-                <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email address</label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="email"
-                    placeholder="colleague@company.com"
-                    value={inviteEmail}
-                    onChange={e => setInviteEmail(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Role</label>
-                <div className="relative">
-                  <select
-                    value={inviteRole}
-                    onChange={e => setInviteRole(e.target.value as Role)}
-                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 appearance-none bg-white pr-8"
-                  >
-                    <option value="Admin">Admin — can manage members</option>
-                    <option value="Member">Member — can record and share</option>
-                    <option value="Viewer">Viewer — can only watch</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-            <div className="px-6 pb-6 flex gap-3">
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleInvite}
-                disabled={!inviteEmail.includes('@') || inviteSent}
-                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-              >
-                {inviteSent ? <><Check className="w-4 h-4" /> Sent!</> : 'Send invite'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <InviteModal isOpen={showInviteModal} onClose={() => setShowInviteModal(false)} />
     </div>
   );
 }

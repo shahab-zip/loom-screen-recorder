@@ -4,6 +4,8 @@ import {
   Search, Folder, X, Check, ChevronDown,
 } from 'lucide-react';
 import { getStorageItem, setStorageItem } from '../lib/storage';
+import { useWorkspace } from '../contexts/WorkspaceContext';
+import { RoleGuard } from './auth/RoleGuard';
 
 interface Space {
   id: string;
@@ -85,13 +87,15 @@ export function SpacesPage() {
             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Spaces</h1>
             <p className="text-sm text-gray-500 mt-1">Organise videos by team, project, or topic</p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-all shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            New space
-          </button>
+          <RoleGuard permission="space:create">
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-all shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              New space
+            </button>
+          </RoleGuard>
         </div>
 
         {/* Stats */}

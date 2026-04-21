@@ -11,7 +11,12 @@ export type ExtensionMessage =
   | { type: 'GET_STATE' }
   | { type: 'STATE_UPDATE'; state: RecordingState }
   | { type: 'GET_RECORDINGS' }
-  | { type: 'RECORDINGS_LIST'; recordings: SavedRecording[] };
+  | { type: 'RECORDINGS_LIST'; recordings: SavedRecording[] }
+  | { type: 'START_CAPTURE'; mode: 'screen' | 'screen-camera'; useCamera: boolean; useMic: boolean; cameraId: string; micId: string; quality: 'HD' | 'SD' | '4K' }
+  | { type: 'FINALIZE_RECORDING' }
+  | { type: 'DELETE_RECORDING'; id: string }
+  | { type: 'OPEN_RECORDING_IN_APP'; id: string }
+  | { type: 'IMPORT_RECORDING_INTO_APP'; recording: SavedRecording };
 
 export interface RecordingState {
   isRecording: boolean;

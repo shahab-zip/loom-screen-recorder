@@ -3,6 +3,8 @@ import { Search, SlidersHorizontal, Grid3x3, List, MoreVertical, Play, Download,
 import type { Video, ViewType, SortType } from '../App';
 import { MagneticButton } from './MagneticButton';
 import { useAppContext } from '../contexts/AppContext';
+import { useWorkspace } from '../contexts/WorkspaceContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface VideoLibraryProps {
   videos: Video[];
@@ -28,6 +30,9 @@ export const VideoLibrary = memo(function VideoLibrary({
   onSortTypeChange
 }: VideoLibraryProps) {
   const { toggleWatchLater, isInWatchLater } = useAppContext();
+  const { can } = useWorkspace();
+  const { state: authState } = useAuth();
+  const canCreateVideo = can('video:create');
   const [searchQuery, setSearchQuery] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -53,6 +58,12 @@ export const VideoLibrary = memo(function VideoLibrary({
     }
     setEditingId(null);
   };
+
+  const canDeleteVideo = (video: Video) =>
+    can('video:delete-any') || (can('video:delete-own') && (video as any).createdBy === authState.currentUser?.id);
+
+  const canEditVideo = (video: Video) =>
+    can('video:edit-any') || (can('video:edit-own') && (video as any).createdBy === authState.currentUser?.id);
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this video?')) {
@@ -96,9 +107,10 @@ export const VideoLibrary = memo(function VideoLibrary({
             <div className="text-xs text-gray-400 mb-2 tracking-widest animate-slide-in-left" style={{ fontWeight: 600 }}>WORKSPACE</div>
             <h1 className="text-5xl tracking-tight text-gray-900 animate-slide-in-left" style={{ fontWeight: 700, animationDelay: '0.1s' }}>MY LIBRARY</h1>
           </div>
-          <button 
+          <button
             onClick={onNewVideo}
-            className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-3 text-white shadow-lg hover:shadow-xl hover:scale-105 transform group"
+            disabled={!canCreateVideo}
+            className={`px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-3 text-white shadow-lg hover:shadow-xl hover:scale-105 transform group ${!canCreateVideo ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
           >
             <div className="w-4 h-4 bg-white rounded-full group-hover:scale-110 transition-transform" />
             <span className="text-sm" style={{ fontWeight: 600 }}>New video</span>

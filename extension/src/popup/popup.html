@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <link rel="stylesheet" href="popup.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <div class="popup">
@@ -24,15 +24,29 @@
       </button>
     </nav>
 
+    <!-- Brand hero -->
+    <div class="brand-row" id="brand-row">
+      <span class="beta-pill">Now in Beta</span>
+      <h1 class="brand-title">Record. Share.<br><span class="accent">Collaborate.</span></h1>
+      <p class="brand-sub">The simplest way to record your screen and share your message.</p>
+    </div>
+
     <!-- IDLE VIEW -->
     <div id="idle-view" class="body-content">
 
       <!-- Capture target -->
-      <button class="card capture-card" id="captureCard">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><circle cx="7" cy="6" r="0.8" fill="currentColor"/><circle cx="10" cy="6" r="0.8" fill="currentColor"/></svg>
-        <span class="card-label">Window</span>
-        <svg class="card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"/></svg>
-      </button>
+      <div class="card device-card" id="captureCard">
+        <div class="device-left">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><circle cx="7" cy="6" r="0.8" fill="currentColor"/><circle cx="10" cy="6" r="0.8" fill="currentColor"/></svg>
+          <div class="device-info">
+            <select id="captureSelect" class="device-select">
+              <option value="screen">Full Screen</option>
+              <option value="window" selected>Window</option>
+              <option value="tab">Current Tab</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       <!-- Camera -->
       <div class="card device-card" id="cameraRow">

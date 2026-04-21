@@ -120,17 +120,43 @@
         status.textContent = s.isPaused ? "Paused" : "Recording";
         pauseBtn.innerHTML = s.isPaused ? '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>' : '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
       },
-      async startCapture(mode) {
+      async startCapture(mode, opts = {}) {
         try {
+          const qualityMap = {
+            SD: { width: 1280, height: 720, frameRate: 24, bitsPerSecond: 2e6 },
+            HD: { width: 1920, height: 1080, frameRate: 30, bitsPerSecond: 5e6 },
+            "4K": { width: 3840, height: 2160, frameRate: 30, bitsPerSecond: 15e6 }
+          };
+          const q = qualityMap[opts.quality || "HD"];
           stream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: 30 },
+            video: { frameRate: q.frameRate, width: q.width, height: q.height },
             audio: true
           });
+          if (opts.useMic) {
+            try {
+              const micStream = await navigator.mediaDevices.getUserMedia({
+                audio: opts.micId ? { deviceId: { exact: opts.micId } } : true
+              });
+              const ac = new AudioContext();
+              const dest = ac.createMediaStreamDestination();
+              const sysTracks = stream.getAudioTracks();
+              if (sysTracks.length) {
+                ac.createMediaStreamSource(new MediaStream([sysTracks[0]])).connect(dest);
+              }
+              ac.createMediaStreamSource(micStream).connect(dest);
+              sysTracks.forEach((t) => stream.removeTrack(t));
+              stream.addTrack(dest.stream.getAudioTracks()[0]);
+            } catch {
+            }
+          }
           chunks = [];
           const mimeType = ["video/webm;codecs=vp9,opus", "video/webm"].find(
             (t) => MediaRecorder.isTypeSupported(t)
           ) || "";
-          mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+          mediaRecorder = new MediaRecorder(stream, {
+            ...mimeType ? { mimeType } : {},
+            videoBitsPerSecond: q.bitsPerSecond
+          });
           mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0)
               chunks.push(e.data);
@@ -203,6 +229,59 @@
 
   // src/content.ts
   var widget = null;
+  var APP_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001"
+  ];
+  var isMainApp = APP_ORIGINS.some((o) => window.location.origin === o);
+  function addRecordingToAppLocalStorage(rec) {
+    const KEY = "recorded-videos";
+    let list = [];
+    try {
+      list = JSON.parse(window.localStorage.getItem(KEY) || "[]");
+    } catch {
+    }
+    if (list.some((v) => v.id === rec.id))
+      return;
+    const video = {
+      id: rec.id,
+      title: rec.title || "Screen Recording",
+      thumbnail: rec.thumbnail,
+      duration: rec.duration,
+      createdAt: rec.createdAt,
+      views: 0,
+      url: rec.url,
+      workspaceId: "default"
+    };
+    list.unshift(video);
+    window.localStorage.setItem(KEY, JSON.stringify(list));
+    showAppBanner(`"${video.title}" imported from extension`);
+    setTimeout(() => window.dispatchEvent(new Event("storage")), 50);
+  }
+  function showAppBanner(text) {
+    const b = document.createElement("div");
+    b.textContent = text;
+    b.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:12px 20px;border-radius:999px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(220,38,38,0.35);z-index:2147483647;opacity:0;transition:opacity .25s,transform .25s;";
+    document.body.appendChild(b);
+    requestAnimationFrame(() => {
+      b.style.opacity = "1";
+    });
+    setTimeout(() => {
+      b.style.opacity = "0";
+      setTimeout(() => b.remove(), 300);
+    }, 3200);
+  }
+  if (isMainApp) {
+    chrome.storage.local.get("pending_import").then((r) => {
+      const rec = r.pending_import;
+      if (rec) {
+        addRecordingToAppLocalStorage(rec);
+        chrome.storage.local.remove("pending_import");
+      }
+    });
+  }
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === "STATE_UPDATE" && "state" in message) {
       const state = message.state;
@@ -219,7 +298,13 @@
     } else if (message.type === "START_CAPTURE" && "mode" in message) {
       if (!widget)
         widget = createWidget();
-      widget.startCapture(message.mode);
+      widget.startCapture(message.mode, {
+        useMic: message.useMic,
+        micId: message.micId,
+        quality: message.quality
+      });
+    } else if (message.type === "IMPORT_RECORDING_INTO_APP" && isMainApp) {
+      addRecordingToAppLocalStorage(message.recording);
     }
   });
   chrome.runtime.sendMessage({ type: "GET_STATE" }, (state) => {

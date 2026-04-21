@@ -21,6 +21,7 @@ export interface Video {
   views: number;
   url: string;
   workspaceId: string;
+  createdBy?: string;
 }
 
 /** Raw shape stored in localStorage (Date serialized as string) */
@@ -33,6 +34,7 @@ export interface VideoRaw {
   views: number;
   url: string;
   workspaceId?: string;
+  createdBy?: string;
 }
 
 export interface Workspace {
@@ -52,5 +54,6 @@ export function hydrateVideo(raw: VideoRaw): Video {
     views: raw.views,
     url: raw.url,
     workspaceId: raw.workspaceId || 'default',
+    createdBy: raw.createdBy,
   };
 }

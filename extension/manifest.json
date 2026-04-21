@@ -8,7 +8,15 @@
     "tabCapture",
     "desktopCapture",
     "storage",
-    "offscreen"
+    "offscreen",
+    "tabs",
+    "notifications"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3000/*",
+    "http://127.0.0.1:3001/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

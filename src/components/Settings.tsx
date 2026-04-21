@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { 
-  User, 
-  Video as VideoIcon, 
-  Mic, 
-  Bell, 
-  Keyboard, 
-  Lock, 
-  Palette, 
+import {
+  User,
+  Video as VideoIcon,
+  Mic,
+  Bell,
+  Keyboard,
+  Lock,
+  Palette,
   HardDrive,
   Monitor,
   Camera,
@@ -14,8 +14,10 @@ import {
   Download,
   Trash2,
   Check,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SettingsProps {
   onNewVideo: () => void;
@@ -24,11 +26,13 @@ interface SettingsProps {
 type SettingsTab = 'profile' | 'recording' | 'audio' | 'notifications' | 'shortcuts' | 'privacy' | 'storage' | 'appearance';
 
 export function Settings({ onNewVideo }: SettingsProps) {
+  const { state: authState, updateProfile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [profileSaved, setProfileSaved] = useState(false);
   const [settings, setSettings] = useState({
     // Profile
-    userName: 'John Doe',
-    userEmail: 'john.doe@example.com',
+    userName: authState.currentUser?.name || 'John Doe',
+    userEmail: authState.currentUser?.email || 'john.doe@example.com',
     workspace: 'sparkpixel-team',
     
     // Recording
@@ -182,8 +186,26 @@ export function Settings({ onNewVideo }: SettingsProps) {
                   />
                 </div>
 
+                <div className="pt-4">
+                  <button
+                    onClick={() => {
+                      updateProfile({ name: settings.userName });
+                      setProfileSaved(true);
+                      setTimeout(() => setProfileSaved(false), 2000);
+                    }}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                  >
+                    {profileSaved ? <><Check className="w-4 h-4" /> Saved!</> : 'Save profile'}
+                  </button>
+                </div>
+
                 <div className="pt-6 border-t border-gray-200">
-                  <button className="text-sm text-red-600 hover:text-red-700 transition-colors" style={{ fontWeight: 600 }}>
+                  <button
+                    onClick={logout}
+                    className="text-sm text-red-600 hover:text-red-700 transition-colors flex items-center gap-2"
+                    style={{ fontWeight: 600 }}
+                  >
+                    <LogOut className="w-4 h-4" />
                     Sign out
                   </button>
                 </div>

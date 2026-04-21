@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Building2, Globe, Lock, Palette, Link2, Slack, Zap,
   Check, ChevronRight, AlertTriangle, Camera, Save,
 } from 'lucide-react';
 import { getStorageItem, setStorageItem } from '../lib/storage';
+import { useWorkspace } from '../contexts/WorkspaceContext';
+import { RoleGuard } from './auth/RoleGuard';
 
 interface WorkspaceConfig {
   name: string;
@@ -15,16 +17,6 @@ interface WorkspaceConfig {
   brandColor: string;
 }
 
-const DEFAULT_CONFIG: WorkspaceConfig = {
-  name: 'My Workspace',
-  description: '',
-  domain: '',
-  defaultPrivacy: 'workspace',
-  allowGuestViewing: true,
-  requireApproval: false,
-  brandColor: '#625DF5',
-};
-
 const INTEGRATIONS = [
   { id: 'slack', name: 'Slack', desc: 'Post recordings directly to Slack channels', icon: '🔔', connected: false },
   { id: 'zoom', name: 'Zoom', desc: 'Sync Zoom meetings and recordings', icon: '🎥', connected: false },
@@ -34,18 +26,61 @@ const INTEGRATIONS = [
 ];
 
 export function WorkspaceSettingsPage() {
-  const [config, setConfig] = useState<WorkspaceConfig>(() =>
-    getStorageItem<WorkspaceConfig>('workspace-config', DEFAULT_CONFIG)
-  );
+  const { currentWorkspace, updateWorkspace, updateWorkspaceSettings, deleteWorkspace, can } = useWorkspace();
+  const canEdit = can('workspace:edit-settings');
+
+  const [config, setConfig] = useState<WorkspaceConfig>({
+    name: currentWorkspace?.name || 'My Workspace',
+    description: currentWorkspace?.description || '',
+    domain: '',
+    defaultPrivacy: currentWorkspace?.settings?.defaultVideoPrivacy || 'workspace',
+    allowGuestViewing: currentWorkspace?.settings?.allowGuestViewing ?? true,
+    requireApproval: currentWorkspace?.settings?.requireApproval ?? false,
+    brandColor: currentWorkspace?.color || '#625DF5',
+  });
   const [saved, setSaved] = useState(false);
   const [integrations, setIntegrations] = useState(INTEGRATIONS);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
 
+  // Sync from context when workspace changes
+  useEffect(() => {
+    if (currentWorkspace) {
+      setConfig({
+        name: currentWorkspace.name,
+        description: currentWorkspace.description || '',
+        domain: '',
+        defaultPrivacy: currentWorkspace.settings?.defaultVideoPrivacy || 'workspace',
+        allowGuestViewing: currentWorkspace.settings?.allowGuestViewing ?? true,
+        requireApproval: currentWorkspace.settings?.requireApproval ?? false,
+        brandColor: currentWorkspace.color || '#625DF5',
+      });
+    }
+  }, [currentWorkspace]);
+
   const handleSave = () => {
-    setStorageItem('workspace-config', config);
+    if (currentWorkspace) {
+      updateWorkspace(currentWorkspace.id, {
+        name: config.name,
+        description: config.description,
+        color: config.brandColor,
+      });
+      updateWorkspaceSettings(currentWorkspace.id, {
+        defaultVideoPrivacy: config.defaultPrivacy,
+        allowGuestViewing: config.allowGuestViewing,
+        requireApproval: config.requireApproval,
+      });
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleDeleteWorkspace = () => {
+    if (currentWorkspace && deleteInput === config.name) {
+      deleteWorkspace(currentWorkspace.id);
+      setShowDeleteConfirm(false);
+      setDeleteInput('');
+    }
   };
 
   const toggleIntegration = (id: string) => {
@@ -64,12 +99,14 @@ export function WorkspaceSettingsPage() {
             <h1 className="text-3xl font-black text-gray-900 tracking-tight">Workspace Settings</h1>
             <p className="text-sm text-gray-500 mt-1">Configure your team's recording environment</p>
           </div>
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-all shadow-sm"
-          >
-            {saved ? <><Check className="w-4 h-4" /> Saved!</> : <><Save className="w-4 h-4" /> Save changes</>}
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold text-sm transition-all shadow-sm"
+            >
+              {saved ? <><Check className="w-4 h-4" /> Saved!</> : <><Save className="w-4 h-4" /> Save changes</>}
+            </button>
+          )}
         </div>
 
         <div className="space-y-6">
@@ -101,7 +138,8 @@ export function WorkspaceSettingsPage() {
                     type="text"
                     value={config.name}
                     onChange={e => setConfig(c => ({ ...c, name: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    disabled={!canEdit}
+                    className={`w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                   />
                 </div>
               </div>
@@ -227,7 +265,8 @@ export function WorkspaceSettingsPage() {
             </div>
           </section>
 
-          {/* Danger Zone */}
+          {/* Danger Zone - Owner only */}
+          <RoleGuard permission="workspace:delete">
           <section className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-red-100 flex items-center gap-3">
               <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center">
@@ -267,6 +306,7 @@ export function WorkspaceSettingsPage() {
                       Cancel
                     </button>
                     <button
+                      onClick={handleDeleteWorkspace}
                       disabled={deleteInput !== config.name}
                       className="flex-1 py-2 bg-red-600 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition-colors"
                     >
@@ -277,6 +317,7 @@ export function WorkspaceSettingsPage() {
               )}
             </div>
           </section>
+          </RoleGuard>
         </div>
       </div>
     </div>

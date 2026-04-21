@@ -3,6 +3,8 @@ import { useAppContext } from './contexts/AppContext';
 import { useScreenRecorder } from './hooks/useScreenRecorder';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Sidebar } from './components/Sidebar';
+import { AuthGuard } from './components/auth/AuthGuard';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { AnnotationToolbar, type AnnotationTool } from './components/AnnotationToolbar';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from './components/AnnotationCanvas';
 import type { ViewType, SortType, Video } from './lib/types';
@@ -312,5 +314,11 @@ function AppContent() {
 }
 
 export default function App() {
-  return <AppContent />;
+  return (
+    <AuthGuard>
+      <WorkspaceProvider>
+        <AppContent />
+      </WorkspaceProvider>
+    </AuthGuard>
+  );
 }
