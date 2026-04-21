@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 import type { User } from '../lib/auth-types';
-import { getStorageItem, setStorageItem, removeStorageItem } from '../lib/storage';
+import { supabase } from '../lib/supabase';
+import { profilesRepo } from '../lib/repos/profiles';
+import type { ProfileRow } from '../lib/repos/profiles';
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 
 interface AuthState {
   currentUser: User | null;
@@ -30,17 +36,37 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return { ...state, isLoading: action.payload };
     case 'UPDATE_PROFILE': {
       if (!state.currentUser) return state;
-      const updated = { ...state.currentUser, ...action.payload };
-      return { ...state, currentUser: updated };
+      return { ...state, currentUser: { ...state.currentUser, ...action.payload } };
     }
     default:
       return state;
   }
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function profileRowToUser(row: ProfileRow): User {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    avatar: row.avatar ?? '',
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at ?? '',
+    isSuperAdmin: row.is_super_admin ?? false,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Context interface
+// ---------------------------------------------------------------------------
+
 interface AuthContextValue {
   state: AuthState;
-  login: (email: string, password: string) => { success: boolean; error?: string };
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  /** @deprecated No public signup — stub kept for type compatibility only. */
   register: (name: string, email: string, password: string) => { success: boolean; error?: string };
   createAccount: (name: string, email: string, password: string) => { success: boolean; error?: string; userId?: string };
   logout: () => void;
@@ -49,160 +75,96 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-interface StoredCredential {
-  userId: string;
-  email: string;
-  passwordHash: string;
-}
-
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
-}
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Seed super admin on first-ever load & restore session
+  // Load profile row and dispatch SET_USER
+  async function loadProfile() {
+    const { data, error } = await profilesRepo.getCurrent();
+    if (error || !data) {
+      dispatch({ type: 'SET_LOADING', payload: false });
+      return;
+    }
+    dispatch({ type: 'SET_USER', payload: profileRowToUser(data) });
+  }
+
+  // Subscribe to Supabase auth state changes
   useEffect(() => {
-    // Seed default super-admin account if no credentials exist yet
-    const creds = getStorageItem<StoredCredential[]>('auth-credentials', []);
-    if (creds.length === 0) {
-      const adminId = 'user_super_admin';
-      const now = new Date().toISOString();
-      const adminUser: User = {
-        id: adminId,
-        name: 'Usman (Admin)',
-        email: 'usman@sparkosol.com',
-        avatar: '',
-        createdAt: now,
-        lastLoginAt: now,
-      };
-      const adminCred: StoredCredential = {
-        userId: adminId,
-        email: 'usman@sparkosol.com',
-        passwordHash: simpleHash('admin123'),
-      };
-      setStorageItem('auth-users', [adminUser]);
-      setStorageItem('auth-credentials', [adminCred]);
-    }
-
-    // Restore session
-    const sessionUserId = getStorageItem<string | null>('auth-session', null);
-    if (sessionUserId) {
-      const users = getStorageItem<User[]>('auth-users', []);
-      const user = users.find(u => u.id === sessionUserId);
-      if (user) {
-        const updatedUser = { ...user, lastLoginAt: new Date().toISOString() };
-        dispatch({ type: 'SET_USER', payload: updatedUser });
-        const updatedUsers = users.map(u => u.id === sessionUserId ? updatedUser : u);
-        setStorageItem('auth-users', updatedUsers);
-        return;
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        loadProfile();
+      } else {
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
-    }
-    dispatch({ type: 'SET_LOADING', payload: false });
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        loadProfile();
+      } else if (event === 'SIGNED_OUT') {
+        dispatch({ type: 'LOGOUT' });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = useCallback((email: string, password: string) => {
-    const creds = getStorageItem<StoredCredential[]>('auth-credentials', []);
-    const cred = creds.find(c => c.email.toLowerCase() === email.toLowerCase());
-    if (!cred) return { success: false, error: 'No account found with this email' };
-    if (cred.passwordHash !== simpleHash(password)) return { success: false, error: 'Incorrect password' };
+  // ---------------------------------------------------------------------------
+  // Actions
+  // ---------------------------------------------------------------------------
 
-    const users = getStorageItem<User[]>('auth-users', []);
-    const user = users.find(u => u.id === cred.userId);
-    if (!user) return { success: false, error: 'User data corrupted' };
-
-    const updatedUser = { ...user, lastLoginAt: new Date().toISOString() };
-    dispatch({ type: 'SET_USER', payload: updatedUser });
-    setStorageItem('auth-session', user.id);
-    const updatedUsers = users.map(u => u.id === user.id ? updatedUser : u);
-    setStorageItem('auth-users', updatedUsers);
+  const login = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    // onAuthStateChange SIGNED_IN will call loadProfile
     return { success: true };
-  }, []);
-
-  const register = useCallback((name: string, email: string, password: string) => {
-    const creds = getStorageItem<StoredCredential[]>('auth-credentials', []);
-    if (creds.some(c => c.email.toLowerCase() === email.toLowerCase())) {
-      return { success: false, error: 'An account with this email already exists' };
-    }
-
-    const userId = `user_${Date.now()}`;
-    const now = new Date().toISOString();
-    const newUser: User = {
-      id: userId,
-      name,
-      email,
-      avatar: '',
-      createdAt: now,
-      lastLoginAt: now,
-    };
-
-    const newCred: StoredCredential = {
-      userId,
-      email: email.toLowerCase(),
-      passwordHash: simpleHash(password),
-    };
-
-    const users = getStorageItem<User[]>('auth-users', []);
-    setStorageItem('auth-users', [...users, newUser]);
-    setStorageItem('auth-credentials', [...creds, newCred]);
-    setStorageItem('auth-session', userId);
-
-    dispatch({ type: 'SET_USER', payload: newUser });
-    return { success: true };
-  }, []);
-
-  // Admin-only: create account without logging in as the new user
-  const createAccount = useCallback((name: string, email: string, password: string) => {
-    const creds = getStorageItem<StoredCredential[]>('auth-credentials', []);
-    if (creds.some(c => c.email.toLowerCase() === email.toLowerCase())) {
-      return { success: false, error: 'An account with this email already exists' };
-    }
-
-    const userId = `user_${Date.now()}`;
-    const now = new Date().toISOString();
-    const newUser: User = {
-      id: userId,
-      name,
-      email,
-      avatar: '',
-      createdAt: now,
-      lastLoginAt: '',
-    };
-
-    const newCred: StoredCredential = {
-      userId,
-      email: email.toLowerCase(),
-      passwordHash: simpleHash(password),
-    };
-
-    const users = getStorageItem<User[]>('auth-users', []);
-    setStorageItem('auth-users', [...users, newUser]);
-    setStorageItem('auth-credentials', [...creds, newCred]);
-    return { success: true, userId };
   }, []);
 
   const logout = useCallback(() => {
-    removeStorageItem('auth-session');
-    dispatch({ type: 'LOGOUT' });
+    supabase.auth.signOut();
+    // onAuthStateChange SIGNED_OUT dispatches LOGOUT
   }, []);
 
-  const updateProfile = useCallback((data: Partial<User>) => {
+  const updateProfile = useCallback(async (data: Partial<User>) => {
+    if (!state.currentUser) return;
+    // Optimistically update UI
     dispatch({ type: 'UPDATE_PROFILE', payload: data });
-    const users = getStorageItem<User[]>('auth-users', []);
-    if (state.currentUser) {
-      const updated = users.map(u =>
-        u.id === state.currentUser!.id ? { ...u, ...data } : u
-      );
-      setStorageItem('auth-users', updated);
+    // Persist to DB (name and avatar are the only patchable fields)
+    const patch: Partial<Pick<import('../lib/repos/profiles').ProfileRow, 'name' | 'avatar'>> = {};
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.avatar !== undefined) patch.avatar = data.avatar;
+    if (Object.keys(patch).length > 0) {
+      await profilesRepo.update(state.currentUser.id, patch);
     }
   }, [state.currentUser]);
+
+  /**
+   * register — removed from public use (no signup flow).
+   * Stub kept so TypeScript callers compile during the transition period.
+   */
+  const register = useCallback((_name: string, _email: string, _password: string) => {
+    return { success: false, error: 'Public registration is disabled. Contact your admin.' };
+  }, []);
+
+  /**
+   * createAccount — admin helper.
+   * Cannot create Supabase Auth users from the browser without service-role key.
+   * Returns a descriptive error; ManagePage will be migrated to invites in Task 16.
+   */
+  const createAccount = useCallback((_name: string, _email: string, _password: string) => {
+    return {
+      success: false,
+      error: 'Admin account creation requires a backend. Use the invite flow instead.',
+    };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ state, login, register, createAccount, logout, updateProfile }}>

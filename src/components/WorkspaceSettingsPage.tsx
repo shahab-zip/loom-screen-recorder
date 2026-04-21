@@ -6,6 +6,7 @@ import {
 import { getStorageItem, setStorageItem } from '../lib/storage';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { RoleGuard } from './auth/RoleGuard';
+import { RequirePermission } from './auth/RequirePermission';
 
 interface WorkspaceConfig {
   name: string;
@@ -266,7 +267,7 @@ export function WorkspaceSettingsPage() {
           </section>
 
           {/* Danger Zone - Owner only */}
-          <RoleGuard permission="workspace:delete">
+          <RequirePermission permission="workspace:delete">
           <section className="bg-white rounded-2xl border border-red-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-red-100 flex items-center gap-3">
               <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center">
@@ -317,7 +318,7 @@ export function WorkspaceSettingsPage() {
               )}
             </div>
           </section>
-          </RoleGuard>
+          </RequirePermission>
         </div>
       </div>
     </div>

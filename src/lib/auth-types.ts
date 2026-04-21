@@ -35,6 +35,7 @@ export interface User {
   avatar: string;
   createdAt: string;
   lastLoginAt: string;
+  isSuperAdmin?: boolean;
 }
 
 export interface WorkspaceMembership {
