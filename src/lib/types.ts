@@ -10,7 +10,8 @@ export type CurrentView =
   | 'manage'
   | 'workspace-settings'
   | 'billing'
-  | 'spaces';
+  | 'spaces'
+  | 'super-admin';
 
 export interface Video {
   id: string;

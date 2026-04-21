@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Sidebar } from './components/Sidebar';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { RouteGuard } from './components/auth/RouteGuard';
+import { AcceptInvitePage } from './components/auth/AcceptInvitePage';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { AnnotationToolbar, type AnnotationTool } from './components/AnnotationToolbar';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from './components/AnnotationCanvas';
@@ -26,6 +27,7 @@ const ManagePage = lazy(() => import('./components/ManagePage').then(m => ({ def
 const WorkspaceSettingsPage = lazy(() => import('./components/WorkspaceSettingsPage').then(m => ({ default: m.WorkspaceSettingsPage })));
 const BillingPage = lazy(() => import('./components/BillingPage').then(m => ({ default: m.BillingPage })));
 const SpacesPage = lazy(() => import('./components/SpacesPage').then(m => ({ default: m.SpacesPage })));
+const SuperAdminPanel = lazy(() => import('./components/SuperAdminPanel').then(m => ({ default: m.SuperAdminPanel })));
 
 // Re-export types for backward compatibility
 export type { ViewType, SortType, Video };
@@ -44,6 +46,7 @@ function AppContent() {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get('invite'));
 
   // ── Screen Recorder ──────────────────────────────────
   const recorder = useScreenRecorder();
@@ -205,6 +208,8 @@ function AppContent() {
         return <RouteGuard permission="workspace:view-billing"><BillingPage /></RouteGuard>;
       case 'spaces':
         return <RouteGuard permission="space:create"><SpacesPage /></RouteGuard>;
+      case 'super-admin':
+        return <SuperAdminPanel />;
       default:
         return null;
     }
@@ -214,7 +219,22 @@ function AppContent() {
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      {showHomepage ? (
+      {inviteToken ? (
+        <>
+          <Sidebar
+            currentView={currentView}
+            onViewChange={(view) => dispatch({ type: 'SET_VIEW', payload: view })}
+            currentWorkspaceId={currentWorkspaceId}
+            onWorkspaceChange={(id) => dispatch({ type: 'SET_WORKSPACE', payload: id })}
+          />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <AcceptInvitePage token={inviteToken} onDone={() => {
+              window.history.replaceState({}, '', window.location.pathname);
+              setInviteToken(null);
+            }} />
+          </div>
+        </>
+      ) : showHomepage ? (
         <Suspense fallback={<LoadingFallback />}>
           <Homepage onGetStarted={handleGetStarted} />
         </Suspense>

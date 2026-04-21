@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
 import {
   Users, UserPlus, Search, MoreHorizontal, Shield, Crown,
-  Eye, Trash2, Check, X, Filter, Plus,
+  Eye, Trash2, Check, X, Filter,
 } from 'lucide-react';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useAuth } from '../contexts/AuthContext';
-import { InviteModal } from './auth/InviteModal';
+import { InviteMemberModal } from './InviteMemberModal';
+import { InviteListPanel } from './InviteListPanel';
 import { ROLE_LABELS, ROLE_COLORS } from '../lib/auth-types';
 import { getAssignableRoles, canManageRole } from '../lib/permissions';
 import type { Role } from '../lib/auth-types';
@@ -23,23 +24,16 @@ const AVATAR_COLORS = [
 ];
 
 export function ManagePage() {
-  const { getWorkspaceMembers, getWorkspaceInvites, changeMemberRole, removeMember, cancelInvite, currentRole, state: wsState, can, addMemberToWorkspace } = useWorkspace();
-  const { state: authState, createAccount } = useAuth();
+  const { getWorkspaceMembers, changeMemberRole, removeMember, currentRole, state: wsState, can } = useWorkspace();
+  const { state: authState } = useAuth();
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [showCreateAccount, setShowCreateAccount] = useState(false);
-  const [newAccName, setNewAccName] = useState('');
-  const [newAccEmail, setNewAccEmail] = useState('');
-  const [newAccPassword, setNewAccPassword] = useState('');
-  const [newAccRole, setNewAccRole] = useState<Role>('member');
-  const [createError, setCreateError] = useState('');
-  const [createSuccess, setCreateSuccess] = useState('');
+  const [inviteRefresh, setInviteRefresh] = useState(0);
 
   const members = getWorkspaceMembers(wsState.currentWorkspaceId);
-  const pendingInvites = getWorkspaceInvites(wsState.currentWorkspaceId);
 
   const filtered = useMemo(() => {
     return members.filter(m => {
@@ -66,41 +60,9 @@ export function ManagePage() {
   const counts = {
     total: members.filter(m => m.status !== 'deactivated').length,
     active: members.filter(m => m.status === 'active').length,
-    pending: pendingInvites.length,
   };
 
   const assignableRoles = currentRole ? getAssignableRoles(currentRole) : [];
-
-  const handleCreateAccount = () => {
-    setCreateError('');
-    setCreateSuccess('');
-    if (!newAccName.trim() || !newAccEmail.trim() || !newAccPassword.trim()) {
-      setCreateError('All fields are required');
-      return;
-    }
-    if (newAccPassword.length < 6) {
-      setCreateError('Password must be at least 6 characters');
-      return;
-    }
-    const result = createAccount(newAccName.trim(), newAccEmail.trim(), newAccPassword);
-    if (!result.success) {
-      setCreateError(result.error || 'Failed to create account');
-      return;
-    }
-    // Add to current workspace with selected role
-    if (result.userId) {
-      addMemberToWorkspace(result.userId, wsState.currentWorkspaceId, newAccRole);
-    }
-    setCreateSuccess(`Account created for ${newAccEmail.trim()}`);
-    setNewAccName('');
-    setNewAccEmail('');
-    setNewAccPassword('');
-    setNewAccRole('member');
-    setTimeout(() => {
-      setShowCreateAccount(false);
-      setCreateSuccess('');
-    }, 1500);
-  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -113,15 +75,6 @@ export function ManagePage() {
             <p className="text-sm text-gray-500 mt-1">Control who has access to your workspace</p>
           </div>
           <div className="flex items-center gap-2">
-            {can('member:invite') && (
-              <button
-                onClick={() => setShowCreateAccount(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold text-sm transition-all shadow-sm hover:shadow-md"
-              >
-                <Plus className="w-4 h-4" />
-                Create account
-              </button>
-            )}
             {can('member:invite') && (
               <button
                 onClick={() => setShowInviteModal(true)}
@@ -139,7 +92,8 @@ export function ManagePage() {
           {[
             { label: 'Total members', value: counts.total, color: 'text-gray-900' },
             { label: 'Active', value: counts.active, color: 'text-green-600' },
-            { label: 'Pending invite', value: counts.pending, color: 'text-yellow-600' },
+            // TODO: fetch real invite count; InviteListPanel below shows accurate list
+            { label: 'Pending invite', value: '—' as string | number, color: 'text-yellow-600' },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
               <div className={`text-2xl font-black ${color}`}>{value}</div>
@@ -288,116 +242,22 @@ export function ManagePage() {
         </div>
 
         {/* Pending Invites */}
-        {pendingInvites.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              Pending Invites ({pendingInvites.length})
-            </h3>
-            {pendingInvites.map(invite => (
-              <div key={invite.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-white mb-2 shadow-sm">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{invite.email}</p>
-                  <p className="text-xs text-gray-500">
-                    Invited as {ROLE_LABELS[invite.role]} &middot; Expires {new Date(invite.expiresAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <button
-                  onClick={() => cancelInvite(invite.id)}
-                  className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600 font-medium px-2 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Cancel
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Create Account Modal */}
-      {showCreateAccount && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100">
-              <h2 className="text-base font-bold text-gray-900">Create Account</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Create a new user and add to this workspace</p>
-            </div>
-            <div className="p-6 space-y-4">
-              {createError && (
-                <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-medium">
-                  {createError}
-                </div>
-              )}
-              {createSuccess && (
-                <div className="px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-medium flex items-center gap-2">
-                  <Check className="w-4 h-4" />
-                  {createSuccess}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full name</label>
-                <input
-                  type="text"
-                  value={newAccName}
-                  onChange={e => setNewAccName(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                  placeholder="John Doe"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={newAccEmail}
-                  onChange={e => setNewAccEmail(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                  placeholder="user@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={newAccPassword}
-                  onChange={e => setNewAccPassword(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                  placeholder="Min 6 characters"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select
-                  value={newAccRole}
-                  onChange={e => setNewAccRole(e.target.value as Role)}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-400 bg-white"
-                >
-                  {assignableRoles.map(role => (
-                    <option key={role} value={role}>{ROLE_LABELS[role]}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50">
-              <button
-                onClick={() => { setShowCreateAccount(false); setCreateError(''); setCreateSuccess(''); }}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateAccount}
-                className="flex-1 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-sm font-semibold text-white transition-colors"
-              >
-                Create Account
-              </button>
-            </div>
+        <div className="mt-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Pending Invites</h3>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+            {wsState.currentWorkspaceId && <InviteListPanel workspaceId={wsState.currentWorkspaceId} refreshKey={inviteRefresh} />}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Invite modal */}
-      <InviteModal isOpen={showInviteModal} onClose={() => setShowInviteModal(false)} />
+      {showInviteModal && wsState.currentWorkspaceId && (
+        <InviteMemberModal
+          workspaceId={wsState.currentWorkspaceId}
+          onClose={() => setShowInviteModal(false)}
+          onCreated={() => setInviteRefresh(k => k + 1)}
+        />
+      )}
     </div>
   );
 }

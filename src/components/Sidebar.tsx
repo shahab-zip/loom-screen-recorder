@@ -1,7 +1,7 @@
 import {
   Home, Video, Clock, History, Settings, Calendar, ChevronDown,
   Users, Plus, PanelLeftClose, PanelLeftOpen, Monitor, CreditCard,
-  ExternalLink, Globe, ChevronRight, UserPlus, Briefcase, LogOut
+  ExternalLink, Globe, ChevronRight, UserPlus, Briefcase, LogOut, Shield,
 } from 'lucide-react';
 import { useState, memo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -34,6 +34,7 @@ export const Sidebar = memo(function Sidebar({
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const { state: authState, logout } = useAuth();
+  const isSuperAdmin = authState.currentUser?.isSuperAdmin ?? false;
   const { currentWorkspace, currentRole, getUserWorkspaces, switchWorkspace, createWorkspace } = useWorkspace();
 
   const userName = authState.currentUser?.name || 'User';
@@ -284,6 +285,9 @@ export const Sidebar = memo(function Sidebar({
                   <RequirePermission permission="workspace:view-billing">
                     <NavItem id={'billing' as CurrentView} label="Billing" icon={CreditCard} external />
                   </RequirePermission>
+                  {isSuperAdmin && (
+                    <NavItem id={'super-admin' as CurrentView} label="Super admin" icon={Shield} />
+                  )}
                 </nav>
               </RoleGuard>
 
