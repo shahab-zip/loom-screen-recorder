@@ -30,7 +30,7 @@ const initialState: AppState = {
   currentWorkspaceId: 'default',
   videos: [],
   selectedVideo: null,
-  showHomepage: true,
+  showHomepage: false,
   viewType: 'all',
   sortType: 'newest',
   isRecording: false,

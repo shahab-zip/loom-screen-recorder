@@ -119,17 +119,25 @@ export const Sidebar = memo(function Sidebar({
         {/* Logo & collapse button */}
         <div className={`flex items-center border-b border-gray-100 flex-shrink-0 ${isCollapsed ? 'flex-col gap-3 py-4 px-2' : 'justify-between px-4 py-3'}`}>
           {!isCollapsed && (
-            <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => onViewChange('for-you' as CurrentView)}
+              className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+            >
               <div className="w-7 h-7 bg-red-600 rounded-lg flex items-center justify-center shadow-sm">
                 <div className="w-2.5 h-2.5 bg-white rounded-full" />
               </div>
               <span className="text-base font-bold text-gray-900 tracking-tight">Loom</span>
-            </div>
+            </button>
           )}
           {isCollapsed && (
-            <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-sm">
-              <div className="w-3 h-3 bg-white rounded-full" />
-            </div>
+            <button
+              onClick={() => onViewChange('for-you' as CurrentView)}
+              className="hover:opacity-80 transition-opacity"
+            >
+              <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-sm">
+                <div className="w-3 h-3 bg-white rounded-full" />
+              </div>
+            </button>
           )}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}

@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoginPage } from './LoginPage';
-import { RegisterPage } from './RegisterPage';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { state } = useAuth();
-  const [authView, setAuthView] = useState<'login' | 'register'>('login');
 
   if (state.isLoading) {
     return (
@@ -16,9 +14,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!state.isAuthenticated) {
-    return authView === 'login'
-      ? <LoginPage onSwitchToRegister={() => setAuthView('register')} />
-      : <RegisterPage onSwitchToLogin={() => setAuthView('login')} />;
+    return <LoginPage />;
   }
 
   return <>{children}</>;

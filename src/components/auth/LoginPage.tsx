@@ -1,11 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
-interface LoginPageProps {
-  onSwitchToRegister: () => void;
-}
-
-export function LoginPage({ onSwitchToRegister }: LoginPageProps) {
+export function LoginPage() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -87,13 +83,7 @@ export function LoginPage({ onSwitchToRegister }: LoginPageProps) {
         </form>
 
         <p className="text-center text-sm text-[#717182] mt-6">
-          Don't have an account?{' '}
-          <button
-            onClick={onSwitchToRegister}
-            className="text-[#dc2626] font-semibold hover:underline"
-          >
-            Create one
-          </button>
+          Contact your workspace admin for access
         </p>
       </div>
     </div>

@@ -68,6 +68,9 @@ interface WorkspaceContextValue {
   acceptInvite: (inviteId: string) => boolean;
   getWorkspaceInvites: (workspaceId: string) => Invite[];
 
+  // Direct member add (admin creates account)
+  addMemberToWorkspace: (userId: string, workspaceId: string, role: Role) => void;
+
   // Permission check shortcut
   can: (permission: Permission) => boolean;
 }
@@ -300,6 +303,20 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return state.invites.filter(i => i.workspaceId === workspaceId && i.status === 'pending');
   }, [state.invites]);
 
+  const addMemberToWorkspace = useCallback((userId: string, workspaceId: string, role: Role) => {
+    // Check if already a member
+    if (state.memberships.some(m => m.userId === userId && m.workspaceId === workspaceId && m.status === 'active')) return;
+    const membership: WorkspaceMembership = {
+      userId,
+      workspaceId,
+      role,
+      joinedAt: new Date().toISOString(),
+      invitedBy: authState.currentUser?.id || null,
+      status: 'active',
+    };
+    dispatch({ type: 'SET_MEMBERSHIPS', payload: [...state.memberships, membership] });
+  }, [authState.currentUser, state.memberships]);
+
   return (
     <WorkspaceContext.Provider value={{
       state,
@@ -319,6 +336,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       cancelInvite,
       acceptInvite,
       getWorkspaceInvites,
+      addMemberToWorkspace,
       can,
     }}>
       {children}

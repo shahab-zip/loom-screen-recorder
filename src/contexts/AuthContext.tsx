@@ -42,6 +42,7 @@ interface AuthContextValue {
   state: AuthState;
   login: (email: string, password: string) => { success: boolean; error?: string };
   register: (name: string, email: string, password: string) => { success: boolean; error?: string };
+  createAccount: (name: string, email: string, password: string) => { success: boolean; error?: string; userId?: string };
   logout: () => void;
   updateProfile: (data: Partial<User>) => void;
 }
@@ -67,8 +68,31 @@ function simpleHash(str: string): string {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Restore session on mount
+  // Seed super admin on first-ever load & restore session
   useEffect(() => {
+    // Seed default super-admin account if no credentials exist yet
+    const creds = getStorageItem<StoredCredential[]>('auth-credentials', []);
+    if (creds.length === 0) {
+      const adminId = 'user_super_admin';
+      const now = new Date().toISOString();
+      const adminUser: User = {
+        id: adminId,
+        name: 'Usman (Admin)',
+        email: 'usman@sparkosol.com',
+        avatar: '',
+        createdAt: now,
+        lastLoginAt: now,
+      };
+      const adminCred: StoredCredential = {
+        userId: adminId,
+        email: 'usman@sparkosol.com',
+        passwordHash: simpleHash('admin123'),
+      };
+      setStorageItem('auth-users', [adminUser]);
+      setStorageItem('auth-credentials', [adminCred]);
+    }
+
+    // Restore session
     const sessionUserId = getStorageItem<string | null>('auth-session', null);
     if (sessionUserId) {
       const users = getStorageItem<User[]>('auth-users', []);
@@ -134,6 +158,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   }, []);
 
+  // Admin-only: create account without logging in as the new user
+  const createAccount = useCallback((name: string, email: string, password: string) => {
+    const creds = getStorageItem<StoredCredential[]>('auth-credentials', []);
+    if (creds.some(c => c.email.toLowerCase() === email.toLowerCase())) {
+      return { success: false, error: 'An account with this email already exists' };
+    }
+
+    const userId = `user_${Date.now()}`;
+    const now = new Date().toISOString();
+    const newUser: User = {
+      id: userId,
+      name,
+      email,
+      avatar: '',
+      createdAt: now,
+      lastLoginAt: '',
+    };
+
+    const newCred: StoredCredential = {
+      userId,
+      email: email.toLowerCase(),
+      passwordHash: simpleHash(password),
+    };
+
+    const users = getStorageItem<User[]>('auth-users', []);
+    setStorageItem('auth-users', [...users, newUser]);
+    setStorageItem('auth-credentials', [...creds, newCred]);
+    return { success: true, userId };
+  }, []);
+
   const logout = useCallback(() => {
     removeStorageItem('auth-session');
     dispatch({ type: 'LOGOUT' });
@@ -151,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [state.currentUser]);
 
   return (
-    <AuthContext.Provider value={{ state, login, register, logout, updateProfile }}>
+    <AuthContext.Provider value={{ state, login, register, createAccount, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
