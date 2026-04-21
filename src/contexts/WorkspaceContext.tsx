@@ -1,15 +1,77 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import type { AuthWorkspace, WorkspaceMembership, Invite, Role, WorkspaceSettings, Permission, User } from '../lib/auth-types';
 import { DEFAULT_WORKSPACE_SETTINGS } from '../lib/auth-types';
 import { hasPermission, canManageRole } from '../lib/permissions';
-import { getStorageItem, setStorageItem } from '../lib/storage';
 import { useAuth } from './AuthContext';
+import { workspacesRepo } from '../lib/repos/workspaces';
+import { membershipsRepo } from '../lib/repos/memberships';
+import { invitesRepo } from '../lib/repos/invites';
+import type { WorkspaceRow } from '../lib/repos/workspaces';
+import type { MembershipRow } from '../lib/repos/memberships';
+import type { InviteRow } from '../lib/repos/invites';
+
+// ---------------------------------------------------------------------------
+// Row → Domain converters
+// ---------------------------------------------------------------------------
+
+function toAuthWorkspace(row: WorkspaceRow): AuthWorkspace {
+  const rawSettings = row.settings as Record<string, unknown>;
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? '',
+    color: row.color ?? '#625DF5',
+    createdBy: row.created_by ?? '',
+    createdAt: row.created_at,
+    settings: {
+      defaultVideoPrivacy:
+        (rawSettings?.defaultVideoPrivacy as WorkspaceSettings['defaultVideoPrivacy']) ??
+        DEFAULT_WORKSPACE_SETTINGS.defaultVideoPrivacy,
+      allowGuestViewing:
+        (rawSettings?.allowGuestViewing as boolean) ?? DEFAULT_WORKSPACE_SETTINGS.allowGuestViewing,
+      requireApproval:
+        (rawSettings?.requireApproval as boolean) ?? DEFAULT_WORKSPACE_SETTINGS.requireApproval,
+      allowDownloads:
+        (rawSettings?.allowDownloads as boolean) ?? DEFAULT_WORKSPACE_SETTINGS.allowDownloads,
+    },
+  };
+}
+
+function toWorkspaceMembership(row: MembershipRow): WorkspaceMembership {
+  return {
+    userId: row.user_id,
+    workspaceId: row.workspace_id,
+    role: row.role,
+    joinedAt: row.joined_at,
+    invitedBy: row.invited_by,
+    status: row.status,
+  };
+}
+
+function toInvite(row: InviteRow): Invite {
+  return {
+    id: row.id,
+    email: row.email,
+    workspaceId: row.workspace_id,
+    role: row.role,
+    invitedBy: row.invited_by ?? '',
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    status: row.status === 'revoked' ? 'expired' : row.status,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 
 interface WorkspaceState {
   workspaces: AuthWorkspace[];
   memberships: WorkspaceMembership[];
   invites: Invite[];
   currentWorkspaceId: string;
+  /** Members for the current workspace (all, not just current user's). */
+  allMembers: (WorkspaceMembership & { user?: User })[];
 }
 
 type WorkspaceAction =
@@ -17,13 +79,15 @@ type WorkspaceAction =
   | { type: 'SET_MEMBERSHIPS'; payload: WorkspaceMembership[] }
   | { type: 'SET_INVITES'; payload: Invite[] }
   | { type: 'SET_CURRENT_WORKSPACE'; payload: string }
+  | { type: 'SET_ALL_MEMBERS'; payload: (WorkspaceMembership & { user?: User })[] }
   | { type: 'HYDRATE'; payload: Partial<WorkspaceState> };
 
 const initialState: WorkspaceState = {
   workspaces: [],
   memberships: [],
   invites: [],
-  currentWorkspaceId: 'default',
+  currentWorkspaceId: '',
+  allMembers: [],
 };
 
 function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
@@ -36,6 +100,8 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): Works
       return { ...state, invites: action.payload };
     case 'SET_CURRENT_WORKSPACE':
       return { ...state, currentWorkspaceId: action.payload };
+    case 'SET_ALL_MEMBERS':
+      return { ...state, allMembers: action.payload };
     case 'HYDRATE':
       return { ...state, ...action.payload };
     default:
@@ -43,33 +109,37 @@ function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): Works
   }
 }
 
+// ---------------------------------------------------------------------------
+// Context interface (preserves existing public API)
+// ---------------------------------------------------------------------------
+
 interface WorkspaceContextValue {
   state: WorkspaceState;
   currentWorkspace: AuthWorkspace | null;
   currentRole: Role | null;
 
   // Workspace CRUD
-  createWorkspace: (name: string, description: string, color: string) => AuthWorkspace;
-  updateWorkspace: (id: string, data: Partial<Pick<AuthWorkspace, 'name' | 'description' | 'color'>>) => void;
-  updateWorkspaceSettings: (id: string, settings: Partial<WorkspaceSettings>) => void;
-  deleteWorkspace: (id: string) => boolean;
+  createWorkspace: (name: string, description: string, color: string) => Promise<AuthWorkspace | null>;
+  updateWorkspace: (id: string, data: Partial<Pick<AuthWorkspace, 'name' | 'description' | 'color'>>) => Promise<void>;
+  updateWorkspaceSettings: (id: string, settings: Partial<WorkspaceSettings>) => Promise<void>;
+  deleteWorkspace: (id: string) => Promise<boolean>;
   switchWorkspace: (id: string) => void;
 
   // Membership
   getUserWorkspaces: () => AuthWorkspace[];
   getWorkspaceMembers: (workspaceId: string) => (WorkspaceMembership & { user?: User })[];
   getMemberRole: (userId: string, workspaceId: string) => Role | null;
-  changeMemberRole: (userId: string, workspaceId: string, newRole: Role) => boolean;
-  removeMember: (userId: string, workspaceId: string) => boolean;
+  changeMemberRole: (userId: string, workspaceId: string, newRole: Role) => Promise<boolean>;
+  removeMember: (userId: string, workspaceId: string) => Promise<boolean>;
 
   // Invites
-  inviteMember: (email: string, role: Role) => Invite | null;
-  cancelInvite: (inviteId: string) => void;
+  inviteMember: (email: string, role: Role) => Promise<Invite | null>;
+  cancelInvite: (inviteId: string) => Promise<void>;
   acceptInvite: (inviteId: string) => boolean;
   getWorkspaceInvites: (workspaceId: string) => Invite[];
 
-  // Direct member add (admin creates account)
-  addMemberToWorkspace: (userId: string, workspaceId: string, role: Role) => void;
+  // Direct member add
+  addMemberToWorkspace: (userId: string, workspaceId: string, role: Role) => Promise<void>;
 
   // Permission check shortcut
   can: (permission: Permission) => boolean;
@@ -77,128 +147,192 @@ interface WorkspaceContextValue {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
+
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { state: authState } = useAuth();
   const [state, dispatch] = useReducer(workspaceReducer, initialState);
 
-  // Persist on change
-  useEffect(() => {
-    if (!authState.currentUser) return; // Don't persist before hydration
-    setStorageItem('ws-workspaces', state.workspaces);
-    setStorageItem('ws-memberships', state.memberships);
-    setStorageItem('ws-invites', state.invites);
-    setStorageItem('ws-current', state.currentWorkspaceId);
-  }, [state, authState.currentUser]);
+  // Use a ref so callbacks can access currentWorkspaceId without stale closure
+  const currentWorkspaceIdRef = useRef(state.currentWorkspaceId);
+  currentWorkspaceIdRef.current = state.currentWorkspaceId;
 
-  // Hydrate on mount or user change
-  useEffect(() => {
-    if (!authState.currentUser) return;
+  // ---------------------------------------------------------------------------
+  // Data loading helpers
+  // ---------------------------------------------------------------------------
 
-    const workspaces = getStorageItem<AuthWorkspace[]>('ws-workspaces', []);
-    const memberships = getStorageItem<WorkspaceMembership[]>('ws-memberships', []);
-    const invites = getStorageItem<Invite[]>('ws-invites', []);
-    const currentId = getStorageItem<string>('ws-current', 'default');
+  async function refreshWorkspaces(userId: string) {
+    const { data: wsRows } = await workspacesRepo.listMine();
+    const workspaces = (wsRows ?? []).map(toAuthWorkspace);
+    dispatch({ type: 'SET_WORKSPACES', payload: workspaces });
+    return workspaces;
+  }
 
-    // Ensure default workspace exists with this user as owner
-    if (!workspaces.some(w => w.id === 'default')) {
-      const defaultWs: AuthWorkspace = {
-        id: 'default',
-        name: 'My Workspace',
-        description: 'Your personal workspace',
-        color: '#625DF5',
-        createdBy: authState.currentUser.id,
-        createdAt: new Date().toISOString(),
-        settings: { ...DEFAULT_WORKSPACE_SETTINGS },
-      };
-      workspaces.push(defaultWs);
-    }
+  async function refreshMemberships(userId: string) {
+    const { data: memRows } = await membershipsRepo.listForUser(userId);
+    const memberships = (memRows ?? []).map(row => toWorkspaceMembership(row as MembershipRow));
+    dispatch({ type: 'SET_MEMBERSHIPS', payload: memberships });
+    return memberships;
+  }
 
-    // Ensure membership exists for current user in default workspace
-    if (!memberships.some(m => m.userId === authState.currentUser!.id && m.workspaceId === 'default')) {
-      memberships.push({
-        userId: authState.currentUser.id,
-        workspaceId: 'default',
-        role: 'owner',
-        joinedAt: new Date().toISOString(),
-        invitedBy: null,
-        status: 'active',
-      });
-    }
+  async function refreshInvites(workspaceId: string) {
+    if (!workspaceId) return;
+    const { data: invRows } = await invitesRepo.listByWorkspace(workspaceId);
+    const invites = (invRows ?? []).map(row => toInvite(row as InviteRow));
+    dispatch({ type: 'SET_INVITES', payload: invites });
+  }
 
-    dispatch({
-      type: 'HYDRATE',
-      payload: { workspaces, memberships, invites, currentWorkspaceId: currentId },
+  async function refreshAllMembers(workspaceId: string) {
+    if (!workspaceId) return;
+    const { data: rows } = await membershipsRepo.listByWorkspace(workspaceId);
+    if (!rows) return;
+
+    // The join includes a `profiles` sub-object on each row
+    const members = (rows as (MembershipRow & { profiles?: { id: string; name: string; email: string; avatar: string } | null })[]).map(row => {
+      const membership = toWorkspaceMembership(row);
+      const profile = row.profiles;
+      const user: User | undefined = profile
+        ? { id: profile.id, name: profile.name, email: profile.email, avatar: profile.avatar ?? '', createdAt: '', lastLoginAt: '' }
+        : undefined;
+      return { ...membership, user };
     });
-  }, [authState.currentUser]);
+
+    dispatch({ type: 'SET_ALL_MEMBERS', payload: members });
+  }
+
+  async function fullRefresh(userId: string, wsId: string) {
+    await Promise.all([
+      refreshWorkspaces(userId),
+      refreshMemberships(userId),
+      refreshInvites(wsId),
+      refreshAllMembers(wsId),
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hydrate when the authenticated user changes
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!authState.currentUser) {
+      dispatch({ type: 'HYDRATE', payload: initialState });
+      return;
+    }
+
+    const userId = authState.currentUser.id;
+
+    (async () => {
+      const [wsResult, memResult] = await Promise.all([
+        workspacesRepo.listMine(),
+        membershipsRepo.listForUser(userId),
+      ]);
+
+      const workspaces = (wsResult.data ?? []).map(toAuthWorkspace);
+      const memberships = (memResult.data ?? []).map(row => toWorkspaceMembership(row as MembershipRow));
+
+      // Default to first workspace if available
+      const firstWsId = workspaces[0]?.id ?? '';
+
+      dispatch({
+        type: 'HYDRATE',
+        payload: { workspaces, memberships, currentWorkspaceId: firstWsId, invites: [], allMembers: [] },
+      });
+
+      // Load per-workspace data for the first workspace
+      if (firstWsId) {
+        await Promise.all([
+          refreshInvites(firstWsId),
+          refreshAllMembers(firstWsId),
+        ]);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState.currentUser?.id]);
+
+  // When current workspace changes, reload its invites and members
+  useEffect(() => {
+    if (!state.currentWorkspaceId || !authState.currentUser) return;
+    refreshInvites(state.currentWorkspaceId);
+    refreshAllMembers(state.currentWorkspaceId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.currentWorkspaceId]);
+
+  // ---------------------------------------------------------------------------
+  // Derived values
+  // ---------------------------------------------------------------------------
 
   const currentWorkspace = state.workspaces.find(w => w.id === state.currentWorkspaceId) || null;
 
   const currentRole = authState.currentUser
     ? (state.memberships.find(
-        m => m.userId === authState.currentUser!.id && m.workspaceId === state.currentWorkspaceId && m.status === 'active'
+        m => m.userId === authState.currentUser!.id &&
+             m.workspaceId === state.currentWorkspaceId &&
+             m.status === 'active'
       )?.role ?? null)
     : null;
 
   const can = useCallback((permission: Permission) => {
+    if (authState.currentUser?.isSuperAdmin) return true;
     if (!currentRole) return false;
     return hasPermission(currentRole, permission);
-  }, [currentRole]);
+  }, [currentRole, authState.currentUser?.isSuperAdmin]);
 
-  const createWorkspace = useCallback((name: string, description: string, color: string) => {
-    const userId = authState.currentUser!.id;
-    const ws: AuthWorkspace = {
-      id: `ws_${Date.now()}`,
-      name,
-      description,
-      color,
-      createdBy: userId,
-      createdAt: new Date().toISOString(),
-      settings: { ...DEFAULT_WORKSPACE_SETTINGS },
-    };
-    const membership: WorkspaceMembership = {
-      userId,
-      workspaceId: ws.id,
-      role: 'owner',
-      joinedAt: ws.createdAt,
-      invitedBy: null,
-      status: 'active',
-    };
-    dispatch({ type: 'SET_WORKSPACES', payload: [...state.workspaces, ws] });
-    dispatch({ type: 'SET_MEMBERSHIPS', payload: [...state.memberships, membership] });
+  // ---------------------------------------------------------------------------
+  // Workspace CRUD
+  // ---------------------------------------------------------------------------
+
+  const createWorkspace = useCallback(async (name: string, description: string, color: string): Promise<AuthWorkspace | null> => {
+    const { data, error } = await workspacesRepo.create({ name, description, color });
+    if (error || !data) return null;
+    const ws = toAuthWorkspace(data);
+
+    if (authState.currentUser) {
+      await refreshWorkspaces(authState.currentUser.id);
+      await refreshMemberships(authState.currentUser.id);
+    }
+
     dispatch({ type: 'SET_CURRENT_WORKSPACE', payload: ws.id });
     return ws;
-  }, [authState.currentUser, state.workspaces, state.memberships]);
+  }, [authState.currentUser]);
 
-  const updateWorkspace = useCallback((id: string, data: Partial<Pick<AuthWorkspace, 'name' | 'description' | 'color'>>) => {
-    dispatch({
-      type: 'SET_WORKSPACES',
-      payload: state.workspaces.map(w => w.id === id ? { ...w, ...data } : w),
-    });
-  }, [state.workspaces]);
+  const updateWorkspace = useCallback(async (id: string, data: Partial<Pick<AuthWorkspace, 'name' | 'description' | 'color'>>) => {
+    await workspacesRepo.update(id, data);
+    if (authState.currentUser) await refreshWorkspaces(authState.currentUser.id);
+  }, [authState.currentUser]);
 
-  const updateWorkspaceSettings = useCallback((id: string, settings: Partial<WorkspaceSettings>) => {
-    dispatch({
-      type: 'SET_WORKSPACES',
-      payload: state.workspaces.map(w =>
-        w.id === id ? { ...w, settings: { ...w.settings, ...settings } } : w
-      ),
-    });
-  }, [state.workspaces]);
+  const updateWorkspaceSettings = useCallback(async (id: string, settings: Partial<WorkspaceSettings>) => {
+    const ws = state.workspaces.find(w => w.id === id);
+    const merged = { ...(ws?.settings ?? DEFAULT_WORKSPACE_SETTINGS), ...settings };
+    await workspacesRepo.update(id, { settings: merged as unknown as Record<string, unknown> });
+    if (authState.currentUser) await refreshWorkspaces(authState.currentUser.id);
+  }, [authState.currentUser, state.workspaces]);
 
-  const deleteWorkspace = useCallback((id: string) => {
-    if (id === 'default') return false;
-    dispatch({ type: 'SET_WORKSPACES', payload: state.workspaces.filter(w => w.id !== id) });
-    dispatch({ type: 'SET_MEMBERSHIPS', payload: state.memberships.filter(m => m.workspaceId !== id) });
-    dispatch({ type: 'SET_INVITES', payload: state.invites.filter(i => i.workspaceId !== id) });
-    if (state.currentWorkspaceId === id) {
-      dispatch({ type: 'SET_CURRENT_WORKSPACE', payload: 'default' });
+  const deleteWorkspace = useCallback(async (id: string): Promise<boolean> => {
+    const { error } = await workspacesRepo.remove(id);
+    if (error) return false;
+
+    if (authState.currentUser) {
+      await refreshWorkspaces(authState.currentUser.id);
+      await refreshMemberships(authState.currentUser.id);
     }
+
+    if (state.currentWorkspaceId === id) {
+      const remaining = state.workspaces.filter(w => w.id !== id);
+      dispatch({ type: 'SET_CURRENT_WORKSPACE', payload: remaining[0]?.id ?? '' });
+    }
+
     return true;
-  }, [state]);
+  }, [authState.currentUser, state.currentWorkspaceId, state.workspaces]);
 
   const switchWorkspace = useCallback((id: string) => {
     dispatch({ type: 'SET_CURRENT_WORKSPACE', payload: id });
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Membership
+  // ---------------------------------------------------------------------------
 
   const getUserWorkspaces = useCallback(() => {
     if (!authState.currentUser) return [];
@@ -209,11 +343,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   }, [authState.currentUser, state.memberships, state.workspaces]);
 
   const getWorkspaceMembers = useCallback((workspaceId: string) => {
-    const users = getStorageItem<User[]>('auth-users', []);
+    // For the current workspace, use the eagerly-loaded allMembers
+    if (workspaceId === state.currentWorkspaceId) {
+      return state.allMembers;
+    }
+    // Fallback: filter from memberships (no user profile data)
     return state.memberships
       .filter(m => m.workspaceId === workspaceId)
-      .map(m => ({ ...m, user: users.find(u => u.id === m.userId) }));
-  }, [state.memberships]);
+      .map(m => ({ ...m, user: undefined }));
+  }, [state.allMembers, state.currentWorkspaceId, state.memberships]);
 
   const getMemberRole = useCallback((userId: string, workspaceId: string) => {
     return state.memberships.find(
@@ -221,101 +359,86 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     )?.role ?? null;
   }, [state.memberships]);
 
-  const changeMemberRole = useCallback((userId: string, workspaceId: string, newRole: Role) => {
+  const changeMemberRole = useCallback(async (userId: string, workspaceId: string, newRole: Role): Promise<boolean> => {
     if (!currentRole || !canManageRole(currentRole, newRole)) return false;
-    const targetMembership = state.memberships.find(
-      m => m.userId === userId && m.workspaceId === workspaceId
-    );
-    if (!targetMembership || !canManageRole(currentRole, targetMembership.role)) return false;
+    const target = state.memberships.find(m => m.userId === userId && m.workspaceId === workspaceId);
+    if (!target || !canManageRole(currentRole, target.role)) return false;
 
-    dispatch({
-      type: 'SET_MEMBERSHIPS',
-      payload: state.memberships.map(m =>
-        m.userId === userId && m.workspaceId === workspaceId ? { ...m, role: newRole } : m
-      ),
-    });
+    const { error } = await membershipsRepo.setRole(userId, workspaceId, newRole);
+    if (error) return false;
+
+    if (authState.currentUser) {
+      await refreshMemberships(authState.currentUser.id);
+      await refreshAllMembers(workspaceId);
+    }
     return true;
-  }, [currentRole, state.memberships]);
+  }, [currentRole, state.memberships, authState.currentUser]);
 
-  const removeMember = useCallback((userId: string, workspaceId: string) => {
-    const targetMembership = state.memberships.find(
-      m => m.userId === userId && m.workspaceId === workspaceId
-    );
-    if (!targetMembership || !currentRole || !canManageRole(currentRole, targetMembership.role)) return false;
+  const removeMember = useCallback(async (userId: string, workspaceId: string): Promise<boolean> => {
+    const target = state.memberships.find(m => m.userId === userId && m.workspaceId === workspaceId);
+    if (!target || !currentRole || !canManageRole(currentRole, target.role)) return false;
 
-    dispatch({
-      type: 'SET_MEMBERSHIPS',
-      payload: state.memberships.map(m =>
-        m.userId === userId && m.workspaceId === workspaceId
-          ? { ...m, status: 'deactivated' as const }
-          : m
-      ),
-    });
+    const { error } = await membershipsRepo.remove(userId, workspaceId);
+    if (error) return false;
+
+    if (authState.currentUser) {
+      await refreshMemberships(authState.currentUser.id);
+      await refreshAllMembers(workspaceId);
+    }
     return true;
-  }, [currentRole, state.memberships]);
+  }, [currentRole, state.memberships, authState.currentUser]);
 
-  const inviteMember = useCallback((email: string, role: Role) => {
+  // ---------------------------------------------------------------------------
+  // Invites
+  // ---------------------------------------------------------------------------
+
+  const inviteMember = useCallback(async (email: string, role: Role): Promise<Invite | null> => {
     if (!authState.currentUser || !can('member:invite')) return null;
-    const invite: Invite = {
-      id: `inv_${Date.now()}`,
-      email: email.toLowerCase(),
+    // owner role cannot be assigned via invite
+    const inviteRole = role === 'owner' ? 'admin' : role as Exclude<Role, 'owner'>;
+    const { data, error } = await invitesRepo.create({
       workspaceId: state.currentWorkspaceId,
-      role,
+      email,
+      role: inviteRole,
       invitedBy: authState.currentUser.id,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'pending',
-    };
-    dispatch({ type: 'SET_INVITES', payload: [...state.invites, invite] });
-    return invite;
-  }, [authState.currentUser, state.currentWorkspaceId, state.invites, can]);
-
-  const cancelInvite = useCallback((inviteId: string) => {
-    dispatch({
-      type: 'SET_INVITES',
-      payload: state.invites.filter(i => i.id !== inviteId),
     });
-  }, [state.invites]);
+    if (error || !data) return null;
+    await refreshInvites(state.currentWorkspaceId);
+    return toInvite(data);
+  }, [authState.currentUser, state.currentWorkspaceId, can]);
 
-  const acceptInvite = useCallback((inviteId: string) => {
-    if (!authState.currentUser) return false;
-    const invite = state.invites.find(i => i.id === inviteId && i.status === 'pending');
-    if (!invite || invite.email !== authState.currentUser.email.toLowerCase()) return false;
+  const cancelInvite = useCallback(async (inviteId: string) => {
+    await invitesRepo.revoke(inviteId);
+    await refreshInvites(state.currentWorkspaceId);
+  }, [state.currentWorkspaceId]);
 
-    const membership: WorkspaceMembership = {
-      userId: authState.currentUser.id,
-      workspaceId: invite.workspaceId,
-      role: invite.role,
-      joinedAt: new Date().toISOString(),
-      invitedBy: invite.invitedBy,
-      status: 'active',
-    };
-
-    dispatch({ type: 'SET_MEMBERSHIPS', payload: [...state.memberships, membership] });
-    dispatch({
-      type: 'SET_INVITES',
-      payload: state.invites.map(i => i.id === inviteId ? { ...i, status: 'accepted' as const } : i),
-    });
-    return true;
-  }, [authState.currentUser, state.invites, state.memberships]);
+  /**
+   * acceptInvite — stubbed: new flow uses token-based AcceptInvitePage.
+   */
+  const acceptInvite = useCallback((_inviteId: string): boolean => {
+    return false;
+  }, []);
 
   const getWorkspaceInvites = useCallback((workspaceId: string) => {
     return state.invites.filter(i => i.workspaceId === workspaceId && i.status === 'pending');
   }, [state.invites]);
 
-  const addMemberToWorkspace = useCallback((userId: string, workspaceId: string, role: Role) => {
-    // Check if already a member
-    if (state.memberships.some(m => m.userId === userId && m.workspaceId === workspaceId && m.status === 'active')) return;
-    const membership: WorkspaceMembership = {
-      userId,
-      workspaceId,
+  const addMemberToWorkspace = useCallback(async (userId: string, workspaceId: string, role: Role) => {
+    await membershipsRepo.insert({
+      user_id: userId,
+      workspace_id: workspaceId,
       role,
-      joinedAt: new Date().toISOString(),
-      invitedBy: authState.currentUser?.id || null,
-      status: 'active',
-    };
-    dispatch({ type: 'SET_MEMBERSHIPS', payload: [...state.memberships, membership] });
-  }, [authState.currentUser, state.memberships]);
+      invited_by: authState.currentUser?.id ?? null,
+    });
+    if (authState.currentUser) {
+      await refreshMemberships(authState.currentUser.id);
+      await refreshAllMembers(workspaceId);
+    }
+  }, [authState.currentUser]);
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <WorkspaceContext.Provider value={{
