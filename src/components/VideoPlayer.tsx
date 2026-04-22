@@ -7,6 +7,7 @@ import {
   ChevronDown, Bookmark
 } from 'lucide-react';
 import type { Video } from '../App';
+import { resolveVideoUrl } from '../lib/video-storage';
 
 interface VideoPlayerProps {
   video: Video;
@@ -66,6 +67,23 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // If the stored URL is the `idb:<id>` sentinel (reload case), resolve it
+  // to a fresh object URL from IndexedDB. Otherwise use the provided URL.
+  const [playUrl, setPlayUrl] = useState<string>(() =>
+    video.url.startsWith('idb:') ? '' : video.url,
+  );
+  useEffect(() => {
+    let revoked: string | null = null;
+    if (video.url.startsWith('idb:')) {
+      resolveVideoUrl(video.id).then((u) => {
+        if (u) { setPlayUrl(u); revoked = u; }
+      });
+    } else {
+      setPlayUrl(video.url);
+    }
+    return () => { if (revoked) URL.revokeObjectURL(revoked); };
+  }, [video.id, video.url]);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -272,7 +290,7 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   // ── Download ──────────────────────────────────────────
   const handleDownload = () => {
     const a = document.createElement('a');
-    a.href = video.url;
+    a.href = playUrl || video.url;
     a.download = `${video.title}.webm`;
     a.click();
   };
@@ -672,7 +690,7 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
 
             <video
               ref={videoRef}
-              src={video.url}
+              src={playUrl}
               className="relative max-w-full max-h-full z-10"
               onTimeUpdate={handleTimeUpdate}
               onLoadedMetadata={e => {

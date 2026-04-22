@@ -56,4 +56,15 @@ export const workspacesRepo = {
   async remove(id: string) {
     return supabase.from('workspaces').delete().eq('id', id);
   },
+
+  /**
+   * Super-admin view: lists every workspace plus a memberships row count.
+   * Relies on RLS allowing super admins to see all workspaces.
+   */
+  async listAllWithCounts() {
+    return supabase
+      .from('workspaces')
+      .select('*, memberships(user_id)')
+      .order('created_at', { ascending: false });
+  },
 };
