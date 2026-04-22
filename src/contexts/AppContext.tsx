@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
 import { getStorageItem, setStorageItem } from '../lib/storage';
 import { hydrateVideo, type Video, type VideoRaw, type ViewType, type SortType, type CurrentView } from '../lib/types';
+import { putVideoBlob, deleteVideoBlob, resolveVideoUrl, blobFromUrl } from '../lib/video-storage';
 
 // ── State ──────────────────────────────────────────────
 
@@ -68,7 +69,9 @@ type Action =
 function appReducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'SET_VIEW':
-      return { ...state, currentView: action.payload };
+      // Navigating away from a video player clears the selection so the
+      // destination view can render instead of the persistent player overlay.
+      return { ...state, currentView: action.payload, selectedVideo: null };
     case 'SET_WORKSPACE':
       return { ...state, currentWorkspaceId: action.payload };
     case 'SET_VIDEOS':
@@ -150,6 +153,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const savedWorkspace = getStorageItem<string>('current-workspace', 'default');
     dispatch({ type: 'SET_WORKSPACE', payload: savedWorkspace });
+
+    // Rehydrate blob URLs: IndexedDB-backed videos use `idb:<id>` sentinels
+    // in storage; turn those into fresh object URLs for this session.
+    (async () => {
+      const resolved = await Promise.all(
+        videos.map(async (v) => {
+          if (!v.url.startsWith('idb:')) return v;
+          const fresh = await resolveVideoUrl(v.id);
+          return fresh ? { ...v, url: fresh } : v;
+        }),
+      );
+      dispatch({ type: 'SET_VIDEOS', payload: resolved });
+    })();
   }, []);
 
   // Persist workspace changes
@@ -157,15 +173,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStorageItem('current-workspace', state.currentWorkspaceId);
   }, [state.currentWorkspaceId]);
 
+  // Rewrite any live blob URLs to idb sentinels before persisting, so the
+  // URLs survive a reload (object URLs don't).
+  const toPersisted = (vs: Video[]): Video[] =>
+    vs.map(v => (v.url.startsWith('blob:') ? { ...v, url: `idb:${v.id}` } : v));
+
   const saveVideos = useCallback((videos: Video[]) => {
     dispatch({ type: 'SET_VIDEOS', payload: videos });
-    setStorageItem('recorded-videos', videos);
+    setStorageItem('recorded-videos', toPersisted(videos));
   }, []);
 
   const handleVideoClick = useCallback((video: Video) => {
     const updatedVideo = { ...video, views: video.views + 1 };
-    dispatch({ type: 'SET_VIDEOS', payload: state.videos.map(v => v.id === video.id ? updatedVideo : v) });
-    setStorageItem('recorded-videos', state.videos.map(v => v.id === video.id ? updatedVideo : v));
+    const nextVideos = state.videos.map(v => v.id === video.id ? updatedVideo : v);
+    dispatch({ type: 'SET_VIDEOS', payload: nextVideos });
+    setStorageItem('recorded-videos', toPersisted(nextVideos));
     dispatch({ type: 'SELECT_VIDEO', payload: updatedVideo });
     // Log to watch history
     const rawHistory = getStorageItem<Array<{ videoId: string; watchedAt: string; watchTime: number }>>('watch-history', []);
@@ -180,6 +202,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const handleDeleteVideo = useCallback((id: string) => {
     const newVideos = state.videos.filter(v => v.id !== id);
     saveVideos(newVideos);
+    // Also evict the persisted blob so IndexedDB doesn't grow unbounded.
+    deleteVideoBlob(id).catch(() => {});
     if (state.selectedVideo?.id === id) {
       dispatch({ type: 'SELECT_VIDEO', payload: null });
     }
@@ -206,20 +230,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return list.includes(videoId);
   }, []);
 
-  const handleNewVideo = useCallback((data: { url: string; duration: number; thumbnail: string }) => {
+  const handleNewVideo = useCallback(async (data: { url: string; duration: number; thumbnail: string }) => {
+    const id = Date.now().toString();
     const newVideo: Video = {
-      id: Date.now().toString(),
+      id,
       title: `Recording ${new Date().toLocaleDateString()} - ${new Date().toLocaleTimeString()}`,
       thumbnail: data.thumbnail,
       duration: data.duration,
       createdAt: new Date(),
       views: 0,
-      url: data.url,
+      url: data.url, // live blob URL for this session
       workspaceId: state.currentWorkspaceId,
     };
+    // Persist the Blob itself so it survives page reload. localStorage holds
+    // only a sentinel URL that we swap for a fresh object URL on next load.
+    const blob = await blobFromUrl(data.url);
+    if (blob) {
+      try { await putVideoBlob(id, blob); } catch (err) { console.warn('video persist failed', err); }
+    }
     const updated = [newVideo, ...state.videos];
     dispatch({ type: 'SET_VIDEOS', payload: updated });
-    setStorageItem('recorded-videos', updated);
+    // Store sentinel form; live URLs won't survive reload anyway.
+    const persisted = updated.map(v => (v.id === id ? { ...v, url: `idb:${id}` } : v));
+    setStorageItem('recorded-videos', persisted);
     dispatch({ type: 'STOP_RECORDING' });
     dispatch({ type: 'SET_SHOW_RECORDING_MODAL', payload: false });
     // Open VideoPlayer immediately so user sees their recording

@@ -28,4 +28,8 @@ export const profilesRepo = {
   async listAll() {
     return supabase.from('profiles').select('*').order('created_at', { ascending: false });
   },
+
+  async setSuperAdmin(id: string, value: boolean) {
+    return supabase.from('profiles').update({ is_super_admin: value }).eq('id', id);
+  },
 };
