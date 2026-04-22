@@ -1,5 +1,5 @@
 // src/components/admin/AddMemberModal.tsx
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, UserPlus, Mail } from 'lucide-react';
 import type { ProfileRow } from '../../lib/repos/profiles';
 import type { Role } from '../../lib/auth-types';
@@ -15,7 +15,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function AddMemberModal({ workspaceId: _ws, users, existingMemberIds, onAddExisting, onInvite, onClose }: Props) {
+export function AddMemberModal({ users, existingMemberIds, onAddExisting, onInvite, onClose }: Props) {
   const [mode, setMode] = useState<Mode>('existing');
   const [role, setRole] = useState<Role>('member');
   const [userId, setUserId] = useState('');
@@ -24,6 +24,18 @@ export function AddMemberModal({ workspaceId: _ws, users, existingMemberIds, onA
   const [error, setError] = useState<string | null>(null);
 
   const addable = useMemo(() => users.filter(u => !existingMemberIds.has(u.id)), [users, existingMemberIds]);
+
+  // Ensure a default user is always selected once the addable list is known,
+  // even if the user never touches the <select>.
+  useEffect(() => {
+    if (!userId && addable[0]?.id) setUserId(addable[0].id);
+  }, [addable, userId]);
+
+  // Owner role cannot be sent as an invite — drop back to member if the user
+  // flips to invite mode while Owner was selected.
+  useEffect(() => {
+    if (mode === 'invite' && role === 'owner') setRole('member');
+  }, [mode, role]);
 
   const submit = async () => {
     setError(null);
@@ -115,7 +127,7 @@ export function AddMemberModal({ workspaceId: _ws, users, existingMemberIds, onA
               onChange={e => setRole(e.target.value as Role)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
             >
-              <option value="owner">Owner</option>
+              {mode === 'existing' && <option value="owner">Owner</option>}
               <option value="admin">Admin</option>
               <option value="member">Member</option>
               <option value="viewer">Viewer</option>

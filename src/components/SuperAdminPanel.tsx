@@ -171,23 +171,44 @@ export function SuperAdminPanel() {
             workspace={detailWs}
             users={users}
             onBack={() => { setDetailWs(null); reload(); }}
-            loadMembers={(id) => membershipsRepo.listByWorkspace(id) as Promise<{ data: any; error: any }>}
-            loadInvites={(id) => invitesRepo.listByWorkspace(id) as Promise<{ data: any; error: any }>}
-            onSetRole={(uid, role) => membershipsRepo.setRole(uid, detailWs.id, role) as Promise<{ error: any }>}
-            onRemoveMember={(uid) => membershipsRepo.remove(uid, detailWs.id) as Promise<{ error: any }>}
-            onRevokeInvite={(iid) => invitesRepo.revoke(iid) as Promise<{ error: any }>}
-            onAddExisting={(uid, role: Role) => membershipsRepo.insert({
-              user_id: uid,
-              workspace_id: detailWs.id,
-              role,
-              invited_by: authState.currentUser?.id ?? null,
-            }) as Promise<{ error: any }>}
-            onInvite={(email, role) => invitesRepo.create({
-              workspaceId: detailWs.id,
-              email,
-              role,
-              invitedBy: authState.currentUser!.id,
-            }) as Promise<{ error: any }>}
+            loadMembers={async (id) => {
+              const { data, error } = await membershipsRepo.listByWorkspace(id);
+              return { data, error };
+            }}
+            loadInvites={async (id) => {
+              const { data, error } = await invitesRepo.listByWorkspace(id);
+              return { data, error };
+            }}
+            onSetRole={async (uid, role) => {
+              const { error } = await membershipsRepo.setRole(uid, detailWs.id, role);
+              return { error };
+            }}
+            onRemoveMember={async (uid) => {
+              const { error } = await membershipsRepo.remove(uid, detailWs.id);
+              return { error };
+            }}
+            onRevokeInvite={async (iid) => {
+              const { error } = await invitesRepo.revoke(iid);
+              return { error };
+            }}
+            onAddExisting={async (uid, role: Role) => {
+              const { error } = await membershipsRepo.insert({
+                user_id: uid,
+                workspace_id: detailWs.id,
+                role,
+                invited_by: authState.currentUser?.id ?? null,
+              });
+              return { error };
+            }}
+            onInvite={async (email, role) => {
+              const { error } = await invitesRepo.create({
+                workspaceId: detailWs.id,
+                email,
+                role,
+                invitedBy: authState.currentUser!.id,
+              });
+              return { error };
+            }}
           />
         ) : tab === 'overview' ? (
           <OverviewTab stats={stats} onJumpUsers={() => setTab('users')} onJumpWs={() => setTab('workspaces')} />

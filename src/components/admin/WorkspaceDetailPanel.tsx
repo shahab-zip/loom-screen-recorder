@@ -29,19 +29,28 @@ export function WorkspaceDetailPanel({
 }: Props) {
   const [members, setMembers] = useState<MemberWithProfile[]>([]);
   const [invites, setInvites] = useState<InviteRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  // Refetches after mutations don't toggle initialLoading, so the tables stay
+  // mounted and we avoid a visible flash/unmount between ops.
   const reload = async () => {
-    setLoading(true);
     const [m, i] = await Promise.all([loadMembers(workspace.id), loadInvites(workspace.id)]);
     setMembers((m.data ?? []) as MemberWithProfile[]);
     setInvites((i.data ?? []).filter(r => r.status === 'pending'));
-    setLoading(false);
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [workspace.id]);
+  useEffect(() => {
+    let cancelled = false;
+    setInitialLoading(true);
+    (async () => {
+      await reload();
+      if (!cancelled) setInitialLoading(false);
+    })();
+    return () => { cancelled = true; };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [workspace.id]);
 
   const memberIds = useMemo(() => new Set(members.map(m => m.user_id)), [members]);
   const ownerCount = useMemo(() => members.filter(m => m.role === 'owner').length, [members]);
@@ -104,7 +113,7 @@ export function WorkspaceDetailPanel({
         </button>
       </div>
 
-      {loading ? (
+      {initialLoading ? (
         <div className="py-12 text-center text-gray-400 text-sm">Loading…</div>
       ) : (
         <>
