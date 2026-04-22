@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Permission } from '../../lib/auth-types';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface RoleGuardProps {
   permission: Permission | Permission[];
@@ -11,6 +12,12 @@ interface RoleGuardProps {
 
 export function RoleGuard({ permission, requireAll = false, fallback = null, children }: RoleGuardProps) {
   const { can, currentRole } = useWorkspace();
+  const { state: authState } = useAuth();
+  const isSuperAdmin = authState.currentUser?.isSuperAdmin ?? false;
+
+  // Super admins bypass role/permission checks entirely. Without this,
+  // a super admin with no workspace membership would see nothing.
+  if (isSuperAdmin) return <>{children}</>;
 
   if (!currentRole) return <>{fallback}</>;
 
