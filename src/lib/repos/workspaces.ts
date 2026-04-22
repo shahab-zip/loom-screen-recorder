@@ -51,37 +51,20 @@ export const workspacesRepo = {
 
   /**
    * Super-admin helper: create a workspace attributed to an arbitrary owner
-   * and seed the matching owner membership in one logical op. Relies on RLS
-   * super-admin bypass for the inserts.
+   * and seed the matching owner membership atomically via the
+   * `create_workspace_as` RPC (security definer, super-admin only).
    */
   async createAs(
     ownerId: string,
     input: { name: string; description?: string; color?: string },
   ) {
-    const wsRes = await supabase
-      .from('workspaces')
-      .insert({
-        name: input.name,
-        description: input.description ?? '',
-        color: input.color ?? '#625DF5',
-        created_by: ownerId,
-        settings: {},
-      })
-      .select()
-      .single<WorkspaceRow>();
-
-    if (wsRes.error || !wsRes.data) return wsRes;
-
-    const memRes = await supabase.from('memberships').insert({
-      user_id: ownerId,
-      workspace_id: wsRes.data.id,
-      role: 'owner',
-      status: 'active',
-      invited_by: null,
+    const { data, error } = await supabase.rpc('create_workspace_as', {
+      _owner_id: ownerId,
+      _name: input.name,
+      _description: input.description ?? '',
+      _color: input.color ?? '#625DF5',
     });
-
-    if (memRes.error) return { data: null, error: memRes.error };
-    return wsRes;
+    return { data: data as WorkspaceRow | null, error };
   },
 
   async update(id: string, patch: Partial<Pick<WorkspaceRow, 'name' | 'description' | 'color' | 'settings'>>) {
