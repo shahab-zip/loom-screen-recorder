@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Shield, Users, Briefcase, Activity, Search, Crown, Trash2, Check, X, ChevronRight,
+  Shield, Users, Briefcase, Activity, Search, Crown, Trash2, Check, X, ChevronRight, Plus,
 } from 'lucide-react';
 import { profilesRepo, type ProfileRow } from '../lib/repos/profiles';
 import { workspacesRepo, type WorkspaceRow } from '../lib/repos/workspaces';
 import { useAuth } from '../contexts/AuthContext';
+import { CreateWorkspaceModal } from './admin/CreateWorkspaceModal';
+import { WorkspaceDetailPanel } from './admin/WorkspaceDetailPanel';
+import { membershipsRepo } from '../lib/repos/memberships';
+import { invitesRepo } from '../lib/repos/invites';
+import type { Role } from '../lib/auth-types';
 
 type Tab = 'overview' | 'users' | 'workspaces';
 
@@ -27,6 +32,8 @@ export function SuperAdminPanel() {
   const [search, setSearch] = useState('');
   const [mutatingId, setMutatingId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [detailWs, setDetailWs] = useState<WorkspaceWithMembers | null>(null);
 
   const reload = async () => {
     setLoading(true);
@@ -159,6 +166,29 @@ export function SuperAdminPanel() {
 
         {loading ? (
           <div className="py-16 text-center text-gray-400 text-sm">Loading…</div>
+        ) : detailWs ? (
+          <WorkspaceDetailPanel
+            workspace={detailWs}
+            users={users}
+            onBack={() => { setDetailWs(null); reload(); }}
+            loadMembers={(id) => membershipsRepo.listByWorkspace(id) as Promise<{ data: any; error: any }>}
+            loadInvites={(id) => invitesRepo.listByWorkspace(id) as Promise<{ data: any; error: any }>}
+            onSetRole={(uid, role) => membershipsRepo.setRole(uid, detailWs.id, role) as Promise<{ error: any }>}
+            onRemoveMember={(uid) => membershipsRepo.remove(uid, detailWs.id) as Promise<{ error: any }>}
+            onRevokeInvite={(iid) => invitesRepo.revoke(iid) as Promise<{ error: any }>}
+            onAddExisting={(uid, role: Role) => membershipsRepo.insert({
+              user_id: uid,
+              workspace_id: detailWs.id,
+              role,
+              invited_by: authState.currentUser?.id ?? null,
+            }) as Promise<{ error: any }>}
+            onInvite={(email, role) => invitesRepo.create({
+              workspaceId: detailWs.id,
+              email,
+              role,
+              invitedBy: authState.currentUser!.id,
+            }) as Promise<{ error: any }>}
+          />
         ) : tab === 'overview' ? (
           <OverviewTab stats={stats} onJumpUsers={() => setTab('users')} onJumpWs={() => setTab('workspaces')} />
         ) : (
@@ -183,14 +213,37 @@ export function SuperAdminPanel() {
                 onToggleSuperAdmin={handleToggleSuperAdmin}
               />
             ) : (
-              <WorkspacesTable
-                workspaces={filteredWorkspaces}
-                users={users}
-                mutatingId={mutatingId}
-                onDelete={handleDeleteWorkspace}
-              />
+              <>
+                <div className="flex items-center justify-end mb-3">
+                  <button
+                    onClick={() => setShowCreate(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700"
+                  >
+                    <Plus className="w-4 h-4" /> Create workspace
+                  </button>
+                </div>
+                <WorkspacesTable
+                  workspaces={filteredWorkspaces}
+                  users={users}
+                  mutatingId={mutatingId}
+                  onDelete={handleDeleteWorkspace}
+                  onOpen={setDetailWs}
+                />
+              </>
             )}
           </>
+        )}
+        {showCreate && (
+          <CreateWorkspaceModal
+            users={users}
+            defaultOwnerId={authState.currentUser!.id}
+            onCreate={async (ownerId, input) => {
+              const res = await workspacesRepo.createAs(ownerId, input);
+              if (!res.error) { flash(`Workspace "${input.name}" created`); await reload(); }
+              return res as { data: unknown; error: { message: string } | null };
+            }}
+            onClose={() => setShowCreate(false)}
+          />
         )}
       </div>
     </div>
@@ -334,8 +387,9 @@ interface WsProps {
   users: ProfileRow[];
   mutatingId: string | null;
   onDelete: (ws: WorkspaceRow) => void;
+  onOpen: (ws: WorkspaceWithMembers) => void;
 }
-function WorkspacesTable({ workspaces, users, mutatingId, onDelete }: WsProps) {
+function WorkspacesTable({ workspaces, users, mutatingId, onDelete, onOpen }: WsProps) {
   const userById = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
   if (workspaces.length === 0) {
     return <div className="py-16 text-center text-gray-400 text-sm">No workspaces match your search.</div>;
@@ -359,7 +413,7 @@ function WorkspacesTable({ workspaces, users, mutatingId, onDelete }: WsProps) {
             return (
               <tr key={ws.id} className="hover:bg-gray-50/60">
                 <td className="px-5 py-3.5">
-                  <div className="flex items-center gap-3">
+                  <button onClick={() => onOpen(ws)} className="flex items-center gap-3 text-left hover:opacity-80">
                     <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: ws.color || '#625DF5' }}>
                       {ws.name.charAt(0).toUpperCase()}
                     </div>
@@ -367,7 +421,7 @@ function WorkspacesTable({ workspaces, users, mutatingId, onDelete }: WsProps) {
                       <div className="text-sm font-semibold text-gray-900">{ws.name}</div>
                       {ws.description && <div className="text-xs text-gray-400 truncate max-w-xs">{ws.description}</div>}
                     </div>
-                  </div>
+                  </button>
                 </td>
                 <td className="px-5 py-3.5 text-sm text-gray-600 hidden md:table-cell">
                   {owner ? owner.name || owner.email : <span className="text-gray-400">—</span>}
