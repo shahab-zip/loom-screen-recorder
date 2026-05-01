@@ -1,11 +1,11 @@
 /**
- * IndexedDB-backed blob store for recorded videos.
- *
- * Blob URLs (from URL.createObjectURL) are revoked on page reload, which is
- * why a freshly recorded video stops playing once you refresh. We store the
- * underlying Blob in IndexedDB keyed by the video id, then regenerate an
- * object URL for the current session on demand.
+ * IndexedDB-backed blob store for recorded videos, plus a Supabase Storage
+ * uploader for public shareable links.
  */
+
+import { supabase } from './supabase';
+
+const VIDEOS_BUCKET = 'videos';
 
 const DB_NAME = 'loom-video-storage';
 const STORE = 'blobs';
@@ -74,4 +74,31 @@ export async function blobFromUrl(url: string): Promise<Blob | null> {
 export async function resolveVideoUrl(id: string): Promise<string | null> {
   const blob = await getVideoBlob(id);
   return blob ? URL.createObjectURL(blob) : null;
+}
+
+/**
+ * Upload a recording to Supabase Storage and return its public URL.
+ * The path is `<auth.uid()>/<videoId>.<ext>` so RLS owner policies apply.
+ */
+export async function uploadVideoForSharing(
+  id: string,
+  blob: Blob,
+): Promise<{ url: string | null; error: { message: string } | null }> {
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes.user) return { url: null, error: { message: 'not authenticated' } };
+
+  const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+  const path = `${userRes.user.id}/${id}.${ext}`;
+
+  const { error: upErr } = await supabase.storage
+    .from(VIDEOS_BUCKET)
+    .upload(path, blob, {
+      cacheControl: '3600',
+      upsert: true,
+      contentType: blob.type || `video/${ext}`,
+    });
+  if (upErr) return { url: null, error: { message: upErr.message } };
+
+  const { data } = supabase.storage.from(VIDEOS_BUCKET).getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
 }

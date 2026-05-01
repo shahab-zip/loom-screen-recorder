@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
 import { getStorageItem, setStorageItem } from '../lib/storage';
 import { hydrateVideo, type Video, type VideoRaw, type ViewType, type SortType, type CurrentView } from '../lib/types';
-import { putVideoBlob, deleteVideoBlob, resolveVideoUrl, blobFromUrl } from '../lib/video-storage';
+import { putVideoBlob, deleteVideoBlob, resolveVideoUrl, blobFromUrl, getVideoBlob, uploadVideoForSharing } from '../lib/video-storage';
 
 // ── State ──────────────────────────────────────────────
 
@@ -130,6 +130,8 @@ interface AppContextValue {
   handleNewVideo: (data: { url: string; duration: number; thumbnail: string }) => void;
   toggleWatchLater: (videoId: string) => void;
   isInWatchLater: (videoId: string) => boolean;
+  /** Upload (or re-upload) a video to public Storage and store the URL on the video. */
+  ensurePublicUrl: (videoId: string) => Promise<{ url: string | null; error: string | null }>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -267,6 +269,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SELECT_VIDEO', payload: newVideo });
   }, [state.videos, state.currentWorkspaceId]);
 
+  const ensurePublicUrl = useCallback(async (videoId: string) => {
+    const video = state.videos.find(v => v.id === videoId);
+    if (!video) return { url: null, error: 'video not found' };
+    if (video.publicUrl) return { url: video.publicUrl, error: null };
+
+    const blob = await getVideoBlob(videoId);
+    if (!blob) return { url: null, error: 'video blob missing locally — cannot share' };
+
+    const { url, error } = await uploadVideoForSharing(videoId, blob);
+    if (error || !url) return { url: null, error: error?.message ?? 'upload failed' };
+
+    const updated = state.videos.map(v => v.id === videoId ? { ...v, publicUrl: url } : v);
+    dispatch({ type: 'SET_VIDEOS', payload: updated });
+    setStorageItem('recorded-videos', toPersisted(updated));
+    if (state.selectedVideo?.id === videoId) {
+      dispatch({ type: 'SELECT_VIDEO', payload: { ...state.selectedVideo, publicUrl: url } });
+    }
+    return { url, error: null };
+  }, [state.videos, state.selectedVideo]);
+
   const value: AppContextValue = {
     state,
     dispatch,
@@ -275,6 +297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     handleDeleteVideo,
     handleRenameVideo,
     handleNewVideo,
+    ensurePublicUrl,
     toggleWatchLater,
     isInWatchLater,
   };

@@ -23,6 +23,8 @@ export interface Video {
   url: string;
   workspaceId: string;
   createdBy?: string;
+  /** Public Supabase Storage URL — set once the recording has been uploaded for sharing. */
+  publicUrl?: string;
 }
 
 /** Raw shape stored in localStorage (Date serialized as string) */
@@ -36,6 +38,7 @@ export interface VideoRaw {
   url: string;
   workspaceId?: string;
   createdBy?: string;
+  publicUrl?: string;
 }
 
 export interface Workspace {
@@ -56,5 +59,6 @@ export function hydrateVideo(raw: VideoRaw): Video {
     url: raw.url,
     workspaceId: raw.workspaceId || 'default',
     createdBy: raw.createdBy,
+    publicUrl: raw.publicUrl,
   };
 }

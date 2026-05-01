@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { Video } from '../App';
 import { resolveVideoUrl } from '../lib/video-storage';
+import { useAppContext } from '../contexts/AppContext';
 
 interface VideoPlayerProps {
   video: Video;
@@ -249,18 +250,12 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
     });
   };
 
-  // ── Copy link ─────────────────────────────────────────
-  // Build a video-specific URL (`?v=<id>`) so the recipient lands directly
-  // on this recording when they open the link. NOTE: video blobs live in
-  // each browser's IndexedDB, so the link only works for someone who has
-  // the same blob locally. Hosted sharing requires uploading the blob to
-  // a server (e.g. Supabase Storage) — see `handleShare` below.
-  const buildShareUrl = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('v', video.id);
-    url.hash = '';
-    return url.toString();
-  };
+  // ── Copy link / Share ─────────────────────────────────
+  // The shareable URL is the public Supabase Storage URL of the recording.
+  // If the video hasn't been uploaded yet, we upload it on first share.
+  const { ensurePublicUrl } = useAppContext();
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const writeToClipboard = async (text: string) => {
     if (navigator.clipboard && window.isSecureContext) {
@@ -284,17 +279,31 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   };
 
   const handleCopyLink = async () => {
-    const ok = await writeToClipboard(buildShareUrl());
+    setShareError(null);
+    setSharing(true);
+    let url = video.publicUrl;
+    if (!url) {
+      const res = await ensurePublicUrl(video.id);
+      setSharing(false);
+      if (res.error || !res.url) {
+        setShareError(res.error || 'Failed to upload — try again.');
+        setTimeout(() => setShareError(null), 4000);
+        return;
+      }
+      url = res.url;
+    } else {
+      setSharing(false);
+    }
+
+    const ok = await writeToClipboard(url);
     if (ok) {
       setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
+      setTimeout(() => setLinkCopied(false), 2500);
     } else {
-      window.prompt('Copy link:', buildShareUrl());
+      window.prompt('Copy link:', url);
     }
   };
 
-  // The big red "Share" button is currently a copy-link shortcut. When hosted
-  // sharing lands (Supabase Storage upload), this should open a share modal.
   const handleShare = handleCopyLink;
 
   // ── Title editing ─────────────────────────────────────
@@ -659,13 +668,24 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
 
           <button
             onClick={handleShare}
-            title={linkCopied ? 'Link copied!' : 'Copy shareable link'}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md font-semibold text-sm text-white ${
-              linkCopied ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+            disabled={sharing}
+            title={shareError ?? (linkCopied ? 'Public link copied!' : sharing ? 'Uploading…' : 'Copy public shareable link')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md font-semibold text-sm text-white disabled:opacity-70 ${
+              shareError ? 'bg-orange-600 hover:bg-orange-700' :
+              linkCopied ? 'bg-green-600 hover:bg-green-700' :
+              'bg-red-600 hover:bg-red-700'
             }`}
           >
-            {linkCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-            {linkCopied ? 'Copied!' : 'Share'}
+            {sharing ? (
+              <RotateCcw className="w-4 h-4 animate-spin" />
+            ) : shareError ? (
+              <Share2 className="w-4 h-4" />
+            ) : linkCopied ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <Share2 className="w-4 h-4" />
+            )}
+            {sharing ? 'Uploading…' : shareError ? 'Failed' : linkCopied ? 'Copied!' : 'Share'}
           </button>
 
           <div className="relative">
