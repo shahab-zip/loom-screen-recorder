@@ -250,16 +250,52 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   };
 
   // ── Copy link ─────────────────────────────────────────
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href)
-      .then(() => {
-        setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 2000);
-      })
-      .catch(() => {
-        console.warn('Clipboard write failed');
-      });
+  // Build a video-specific URL (`?v=<id>`) so the recipient lands directly
+  // on this recording when they open the link. NOTE: video blobs live in
+  // each browser's IndexedDB, so the link only works for someone who has
+  // the same blob locally. Hosted sharing requires uploading the blob to
+  // a server (e.g. Supabase Storage) — see `handleShare` below.
+  const buildShareUrl = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('v', video.id);
+    url.hash = '';
+    return url.toString();
   };
+
+  const writeToClipboard = async (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+    }
+    // Fallback for http / older browsers
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleCopyLink = async () => {
+    const ok = await writeToClipboard(buildShareUrl());
+    if (ok) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } else {
+      window.prompt('Copy link:', buildShareUrl());
+    }
+  };
+
+  // The big red "Share" button is currently a copy-link shortcut. When hosted
+  // sharing lands (Supabase Storage upload), this should open a share modal.
+  const handleShare = handleCopyLink;
 
   // ── Title editing ─────────────────────────────────────
   const saveTitle = () => {
@@ -621,9 +657,15 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
             <Download className="w-4 h-4" />
           </button>
 
-          <button className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-semibold text-sm">
-            <Share2 className="w-4 h-4" />
-            Share
+          <button
+            onClick={handleShare}
+            title={linkCopied ? 'Link copied!' : 'Copy shareable link'}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md font-semibold text-sm text-white ${
+              linkCopied ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {linkCopied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+            {linkCopied ? 'Copied!' : 'Share'}
           </button>
 
           <div className="relative">

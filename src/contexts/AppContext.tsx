@@ -165,6 +165,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }),
       );
       dispatch({ type: 'SET_VIDEOS', payload: resolved });
+
+      // Auto-open a video if the URL has `?v=<id>` (from a shared link).
+      const params = new URLSearchParams(window.location.search);
+      const sharedId = params.get('v');
+      if (sharedId) {
+        const target = resolved.find(v => v.id === sharedId);
+        if (target) dispatch({ type: 'SELECT_VIDEO', payload: target });
+      }
     })();
   }, []);
 
