@@ -749,15 +749,12 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
       </header>
 
       {/* ── Main content ─────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* ── Video + reactions + comments column ───── */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-950 min-w-0">
+      <div className="flex flex-col flex-1 overflow-hidden">
 
           {/* Video player */}
           <div
             ref={containerRef}
-            className="relative flex-1 flex items-center justify-center bg-gray-950 group cursor-pointer overflow-hidden"
+            className="relative flex-1 min-h-0 flex items-center justify-center bg-gray-950 group cursor-pointer overflow-hidden"
             onMouseMove={resetControlsTimer}
             onClick={togglePlay}
           >
@@ -959,13 +956,12 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
                 </span>
               )}
             </button>
-          </div>
         </div>
 
-        {/* ── Right panel ──────────────────────────── */}
-        <div className="w-80 flex flex-col border-l border-gray-100 bg-white flex-shrink-0 overflow-hidden">
+        {/* ── Bottom panel ─────────────────────────── */}
+        <div className="flex flex-col border-t border-gray-100 bg-white flex-shrink-0 overflow-hidden">
           {/* Tab bar */}
-          <div className="flex border-b border-gray-100 flex-shrink-0">
+          <div className="flex border-b border-gray-100 flex-shrink-0 px-4 gap-1">
             {([
               { id: 'edit', label: 'Edit', icon: Scissors },
               { id: 'activity', label: 'Activity', icon: Activity },
@@ -975,20 +971,20 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-semibold transition-all border-b-2 ${
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-all border-b-2 ${
                   activeTab === id
                     ? 'border-red-600 text-red-600'
-                    : 'border-transparent text-gray-400 hover:text-gray-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className="w-4 h-4" />
                 {label}
               </button>
             ))}
           </div>
 
           {/* Panel content */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="max-h-80 overflow-y-auto">
             {renderRightPanel()}
           </div>
         </div>
