@@ -11,6 +11,9 @@ import type { Video } from '../App';
 import { resolveVideoUrl } from '../lib/video-storage';
 import { useAppContext } from '../contexts/AppContext';
 import { useVideoPermissions } from '../hooks/useVideoPermissions';
+import { updateVideoVisibility } from '../lib/video-repo';
+
+type Visibility = 'link' | 'workspace' | 'private';
 
 interface VideoPlayerProps {
   video: Video;
@@ -137,6 +140,22 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   const [titleValue, setTitleValue] = useState(video.title);
   const [reactions, setReactions] = useState<Record<string, number>>({});
   const [myReaction, setMyReaction] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<Visibility>(video.visibility ?? 'link');
+  const [savingVisibility, setSavingVisibility] = useState(false);
+  useEffect(() => { setVisibility(video.visibility ?? 'link'); }, [video.id, video.visibility]);
+
+  const handleVisibilityChange = useCallback(async (next: Visibility) => {
+    if (next === visibility || savingVisibility) return;
+    const prev = visibility;
+    setVisibility(next);
+    setSavingVisibility(true);
+    const { error } = await updateVideoVisibility(video.id, next);
+    setSavingVisibility(false);
+    if (error) {
+      console.warn('visibility update failed', error);
+      setVisibility(prev);
+    }
+  }, [video.id, visibility, savingVisibility]);
   const [comments, setComments] = useState<Comment[]>(MOCK_COMMENTS);
   const [newComment, setNewComment] = useState('');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -547,26 +566,37 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
       case 'settings':
         return (
           <div className="p-5 space-y-5">
-            <div>
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Privacy</h3>
-              <div className="space-y-3">
-                {[
-                  { label: 'Anyone with the link', desc: 'Default sharing', active: true },
-                  { label: 'Only me', desc: 'Private — only you can view', active: false },
-                  { label: 'Workspace only', desc: 'Everyone in your workspace', active: false },
-                ].map(({ label, desc, active }) => (
-                  <button key={label} className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${active ? 'border-red-300 bg-red-50' : 'border-gray-100 hover:border-gray-200'}`}>
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${active ? 'border-red-600' : 'border-gray-300'}`}>
-                      {active && <div className="w-2 h-2 bg-red-600 rounded-full" />}
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-gray-800">{label}</div>
-                      <div className="text-xs text-gray-400">{desc}</div>
-                    </div>
-                  </button>
-                ))}
+            {canEdit && (
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Privacy</h3>
+                <div className="space-y-3">
+                  {([
+                    { value: 'link' as const, label: 'Anyone with the link', desc: 'Default sharing' },
+                    { value: 'private' as const, label: 'Only me', desc: 'Private — only you can view' },
+                    { value: 'workspace' as const, label: 'Workspace only', desc: 'Everyone in your workspace' },
+                  ]).map(({ value, label, desc }) => {
+                    const active = visibility === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        disabled={savingVisibility}
+                        onClick={() => handleVisibilityChange(value)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${active ? 'border-red-300 bg-red-50' : 'border-gray-100 hover:border-gray-200'} ${savingVisibility ? 'opacity-60 cursor-wait' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${active ? 'border-red-600' : 'border-gray-300'}`}>
+                          {active && <div className="w-2 h-2 bg-red-600 rounded-full" />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-800">{label}</div>
+                          <div className="text-xs text-gray-400">{desc}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {canDelete && (
               <div>

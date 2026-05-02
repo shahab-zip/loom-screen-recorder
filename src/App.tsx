@@ -12,6 +12,7 @@ import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { AnnotationToolbar, type AnnotationTool } from './components/AnnotationToolbar';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from './components/AnnotationCanvas';
 import type { ViewType, SortType, Video } from './lib/types';
+import { fetchVideoById, incrementVideoViews } from './lib/video-repo';
 
 // Lazy-load route-level components for code splitting
 const Homepage = lazy(() => import('./components/Homepage').then(m => ({ default: m.Homepage })));
@@ -187,8 +188,52 @@ function AppContent() {
 
   const VideoPlayerRoute = () => {
     const { videoId } = useParams<{ videoId: string }>();
-    const video = videos.find(v => v.id === videoId);
-    if (!video) return <Navigate to="/library" replace />;
+    const localVideo = videos.find(v => v.id === videoId);
+    const [remoteVideo, setRemoteVideo] = useState<Video | null>(null);
+    const [loading, setLoading] = useState<boolean>(!localVideo);
+    const [notFound, setNotFound] = useState<boolean>(false);
+    const viewBumpedRef = useRef<string | null>(null);
+
+    // If the video isn't in local state, fetch it from Supabase.
+    useEffect(() => {
+      if (!videoId || localVideo) return;
+      let cancelled = false;
+      setLoading(true);
+      setNotFound(false);
+      fetchVideoById(videoId)
+        .then(v => {
+          if (cancelled) return;
+          if (v) setRemoteVideo(v);
+          else setNotFound(true);
+        })
+        .catch(() => { if (!cancelled) setNotFound(true); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+      return () => { cancelled = true; };
+    }, [videoId, localVideo]);
+
+    const video = localVideo ?? remoteVideo;
+
+    // Bump view counter once per (route, video) combination.
+    useEffect(() => {
+      if (!video || viewBumpedRef.current === video.id) return;
+      viewBumpedRef.current = video.id;
+      incrementVideoViews(video.id).catch(() => {});
+    }, [video]);
+
+    if (!localVideo && loading) return <LoadingFallback />;
+    if (!video) {
+      if (notFound) {
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <h2 className="text-xl font-semibold text-gray-800 mb-2">Video not found</h2>
+            <p className="text-sm text-gray-500 max-w-md">
+              This video may have been deleted, or the link may be incorrect.
+            </p>
+          </div>
+        );
+      }
+      return <LoadingFallback />;
+    }
     return (
       <VideoPlayer
         video={video}

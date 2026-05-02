@@ -29,7 +29,10 @@
       "Bash(gh --version)",
       "Bash(gh auth *)",
       "mcp__cc8fe707-451e-40c1-9159-229251215f75__list_deployments",
-      "mcp__cc8fe707-451e-40c1-9159-229251215f75__list_projects"
+      "mcp__cc8fe707-451e-40c1-9159-229251215f75__list_projects",
+      "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__list_tables",
+      "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__apply_migration",
+      "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__get_advisors"
     ]
   }
 }

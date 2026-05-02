@@ -2,6 +2,8 @@ import { createContext, useContext, useReducer, useEffect, useCallback, type Rea
 import { getStorageItem, setStorageItem } from '../lib/storage';
 import { hydrateVideo, type Video, type VideoRaw, type CurrentView } from '../lib/types';
 import { putVideoBlob, deleteVideoBlob, resolveVideoUrl, blobFromUrl, getVideoBlob, uploadVideoForSharing } from '../lib/video-storage';
+import { upsertVideo } from '../lib/video-repo';
+import { supabase } from '../lib/supabase';
 
 // ── State ──────────────────────────────────────────────
 
@@ -232,6 +234,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handleNewVideo = useCallback(async (data: { url: string; duration: number; thumbnail: string }) => {
     const id = Date.now().toString();
+    // Capture the current auth user so useVideoPermissions can correctly gate
+    // owner-only actions on freshly recorded videos.
+    let createdBy: string | undefined;
+    try {
+      const { data: u } = await supabase.auth.getUser();
+      createdBy = u.user?.id;
+    } catch {
+      // ignore — falls through to undefined; permissions will be conservative
+    }
     const newVideo: Video = {
       id,
       title: `Recording ${new Date().toLocaleDateString()} - ${new Date().toLocaleTimeString()}`,
@@ -241,6 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       views: 0,
       url: data.url, // live blob URL for this session
       workspaceId: state.currentWorkspaceId,
+      createdBy,
     };
     // Persist the Blob itself so it survives page reload. localStorage holds
     // only a sentinel URL that we swap for a fresh object URL on next load.
@@ -267,8 +279,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const blob = await getVideoBlob(videoId);
     if (!blob) return { url: null, error: 'video blob missing locally — cannot share' };
 
-    const { url, error } = await uploadVideoForSharing(videoId, blob);
+    const { url, path, error } = await uploadVideoForSharing(videoId, blob);
     if (error || !url) return { url: null, error: error?.message ?? 'upload failed' };
+
+    // Mirror metadata to Supabase so other users can resolve the share URL.
+    // Failure here doesn't block sharing — the storage upload already succeeded.
+    try {
+      const { error: upsertErr } = await upsertVideo({
+        id: video.id,
+        title: video.title,
+        duration: video.duration,
+        thumbnail: video.thumbnail,
+        public_url: url,
+        storage_path: path,
+        workspace_id: video.workspaceId,
+        visibility: video.visibility ?? 'link',
+      });
+      if (upsertErr) console.warn('video metadata upsert failed', upsertErr);
+    } catch (err) {
+      console.warn('video metadata upsert threw', err);
+    }
 
     const updated = state.videos.map(v => v.id === videoId ? { ...v, publicUrl: url } : v);
     dispatch({ type: 'SET_VIDEOS', payload: updated });

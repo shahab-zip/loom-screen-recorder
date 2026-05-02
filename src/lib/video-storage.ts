@@ -83,9 +83,9 @@ export async function resolveVideoUrl(id: string): Promise<string | null> {
 export async function uploadVideoForSharing(
   id: string,
   blob: Blob,
-): Promise<{ url: string | null; error: { message: string } | null }> {
+): Promise<{ url: string | null; path: string | null; error: { message: string } | null }> {
   const { data: userRes } = await supabase.auth.getUser();
-  if (!userRes.user) return { url: null, error: { message: 'not authenticated' } };
+  if (!userRes.user) return { url: null, path: null, error: { message: 'not authenticated' } };
 
   const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
   const path = `${userRes.user.id}/${id}.${ext}`;
@@ -97,8 +97,8 @@ export async function uploadVideoForSharing(
       upsert: true,
       contentType: blob.type || `video/${ext}`,
     });
-  if (upErr) return { url: null, error: { message: upErr.message } };
+  if (upErr) return { url: null, path: null, error: { message: upErr.message } };
 
   const { data } = supabase.storage.from(VIDEOS_BUCKET).getPublicUrl(path);
-  return { url: data.publicUrl, error: null };
+  return { url: data.publicUrl, path, error: null };
 }
