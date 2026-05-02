@@ -314,8 +314,10 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   const handleCopyLink = async () => {
     setShareError(null);
     setSharing(true);
-    let url = video.publicUrl;
-    if (!url) {
+    // Ensure the video is uploaded to public storage so recipients can actually
+    // play it. We don't put the storage URL in the clipboard — we share the app
+    // route — but the upload must succeed before the link is meaningful.
+    if (!video.publicUrl) {
       const res = await ensurePublicUrl(video.id);
       setSharing(false);
       if (res.error || !res.url) {
@@ -323,17 +325,15 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
         setTimeout(() => setShareError(null), 4000);
         return;
       }
-      url = res.url;
     } else {
       setSharing(false);
     }
 
-    // Append ?t=<seconds> when the user has played past the start.
-    let shareUrl = url;
-    if (currentTime > 0) {
-      const sep = url.includes('?') ? '&' : '?';
-      shareUrl = `${url}${sep}t=${Math.floor(currentTime)}`;
-    }
+    // Build the human-shareable app URL: <origin>/videos/:id[?t=N]
+    const base = `${window.location.origin}/videos/${video.id}`;
+    const shareUrl = currentTime > 0
+      ? `${base}?t=${Math.floor(currentTime)}`
+      : base;
 
     const ok = await writeToClipboard(shareUrl);
     if (ok) {
