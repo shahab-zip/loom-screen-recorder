@@ -4,7 +4,6 @@ import type { Video, ViewType, SortType } from '../App';
 import { MagneticButton } from './MagneticButton';
 import { useAppContext } from '../contexts/AppContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
-import { useAuth } from '../contexts/AuthContext';
 import { useVideoPermissions } from '../hooks/useVideoPermissions';
 import { RequirePermission } from './auth/RequirePermission';
 
@@ -75,7 +74,6 @@ export const VideoLibrary = memo(function VideoLibrary({
 }: VideoLibraryProps) {
   const { toggleWatchLater, isInWatchLater } = useAppContext();
   const { can } = useWorkspace();
-  const { state: authState } = useAuth();
   const canCreateVideo = can('video:create');
   const [searchQuery, setSearchQuery] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -102,12 +100,6 @@ export const VideoLibrary = memo(function VideoLibrary({
     }
     setEditingId(null);
   };
-
-  const canDeleteVideo = (video: Video) =>
-    can('video:delete-any') || (can('video:delete-own') && (video as any).createdBy === authState.currentUser?.id);
-
-  const canEditVideo = (video: Video) =>
-    can('video:edit-any') || (can('video:edit-own') && (video as any).createdBy === authState.currentUser?.id);
 
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this video?')) {
