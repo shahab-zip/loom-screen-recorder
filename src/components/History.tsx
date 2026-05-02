@@ -2,6 +2,7 @@ import { useState, useEffect, memo } from 'react';
 import { History as HistoryIcon, Play, Trash2, Clock, Search, Calendar } from 'lucide-react';
 import type { Video } from '../App';
 import { getStorageItem, setStorageItem } from '../lib/storage';
+import { RequirePermission } from './auth/RequirePermission';
 
 interface HistoryEntryRaw {
   videoId: string;
@@ -146,15 +147,17 @@ export const History = memo(function History({ videos, onVideoClick, onNewVideo 
                 Clear history
               </button>
             )}
-            <button 
-              onClick={onNewVideo}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-2 text-white shadow-lg hover:shadow-xl hover:scale-105 group relative overflow-hidden"
-              style={{ fontWeight: 600 }}
-            >
-              <div className="w-3 h-3 bg-white rounded-full group-hover:animate-heartbeat" />
-              <span className="text-sm">New video</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-            </button>
+            <RequirePermission permission="video:create">
+              <button
+                onClick={onNewVideo}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-2 text-white shadow-lg hover:shadow-xl hover:scale-105 group relative overflow-hidden"
+                style={{ fontWeight: 600 }}
+              >
+                <div className="w-3 h-3 bg-white rounded-full group-hover:animate-heartbeat" />
+                <span className="text-sm">New video</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+              </button>
+            </RequirePermission>
           </div>
         </div>
         <p className="text-sm text-gray-500 mt-2">

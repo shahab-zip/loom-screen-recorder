@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Calendar as CalendarIcon, Plus, Clock, Users, Video, ExternalLink, Copy, Trash2 } from 'lucide-react';
 import { getStorageItem, setStorageItem } from '../lib/storage';
+import { RequirePermission } from './auth/RequirePermission';
 
 interface Meeting {
   id: string;
@@ -208,13 +209,15 @@ export function Meetings({ onNewVideo }: MeetingsProps) {
                       >
                         <ExternalLink className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={onNewVideo}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded transition-colors flex items-center gap-2 text-white"
-                      >
-                        <div className="w-2 h-2 bg-white rounded-full" />
-                        <span className="text-sm">Record</span>
-                      </button>
+                      <RequirePermission permission="video:create">
+                        <button
+                          onClick={onNewVideo}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded transition-colors flex items-center gap-2 text-white"
+                        >
+                          <div className="w-2 h-2 bg-white rounded-full" />
+                          <span className="text-sm">Record</span>
+                        </button>
+                      </RequirePermission>
                       <button
                         onClick={() => handleDeleteMeeting(meeting.id)}
                         className="p-2 hover:bg-gray-100 rounded transition-colors text-red-600"

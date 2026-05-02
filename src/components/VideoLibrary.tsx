@@ -6,6 +6,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useVideoPermissions } from '../hooks/useVideoPermissions';
+import { RequirePermission } from './auth/RequirePermission';
 
 function VideoRowActions({
   video,
@@ -150,14 +151,16 @@ export const VideoLibrary = memo(function VideoLibrary({
             <div className="text-xs text-gray-400 mb-2 tracking-widest animate-slide-in-left" style={{ fontWeight: 600 }}>WORKSPACE</div>
             <h1 className="text-5xl tracking-tight text-gray-900 animate-slide-in-left" style={{ fontWeight: 700, animationDelay: '0.1s' }}>MY LIBRARY</h1>
           </div>
-          <button
-            onClick={onNewVideo}
-            disabled={!canCreateVideo}
-            className={`px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-3 text-white shadow-lg hover:shadow-xl hover:scale-105 transform group ${!canCreateVideo ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
-          >
-            <div className="w-4 h-4 bg-white rounded-full group-hover:scale-110 transition-transform" />
-            <span className="text-sm" style={{ fontWeight: 600 }}>New video</span>
-          </button>
+          <RequirePermission permission="video:create">
+            <button
+              onClick={onNewVideo}
+              disabled={!canCreateVideo}
+              className={`px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-3 text-white shadow-lg hover:shadow-xl hover:scale-105 transform group ${!canCreateVideo ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
+            >
+              <div className="w-4 h-4 bg-white rounded-full group-hover:scale-110 transition-transform" />
+              <span className="text-sm" style={{ fontWeight: 600 }}>New video</span>
+            </button>
+          </RequirePermission>
         </div>
 
         {/* Search and Filters */}
@@ -282,14 +285,16 @@ export const VideoLibrary = memo(function VideoLibrary({
                 <p className="text-gray-500 mb-6 max-w-md">
                   Start recording to see your videos here. It only takes a click to get started.
                 </p>
-                <button
-                  onClick={onNewVideo}
-                  className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-all text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:scale-105 transform"
-                  style={{ fontWeight: 600 }}
-                >
-                  <div className="w-3 h-3 bg-white rounded-full" />
-                  <span>Create your first video</span>
-                </button>
+                <RequirePermission permission="video:create">
+                  <button
+                    onClick={onNewVideo}
+                    className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-all text-white flex items-center gap-2 shadow-lg hover:shadow-xl hover:scale-105 transform"
+                    style={{ fontWeight: 600 }}
+                  >
+                    <div className="w-3 h-3 bg-white rounded-full" />
+                    <span>Create your first video</span>
+                  </button>
+                </RequirePermission>
               </>
             )}
           </div>
