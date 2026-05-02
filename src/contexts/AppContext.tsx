@@ -49,6 +49,7 @@ type Action =
   | { type: 'SET_VIEW'; payload: CurrentView }
   | { type: 'SET_WORKSPACE'; payload: string }
   | { type: 'SET_VIDEOS'; payload: Video[] }
+  | { type: 'PATCH_VIDEO'; payload: { id: string; patch: Partial<Video> } }
   | { type: 'SELECT_VIDEO'; payload: Video | null }
   | { type: 'SET_SHOW_HOMEPAGE'; payload: boolean }
   | { type: 'SET_RECORDING'; payload: boolean }
@@ -72,6 +73,16 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, currentWorkspaceId: action.payload };
     case 'SET_VIDEOS':
       return { ...state, videos: action.payload };
+    case 'PATCH_VIDEO': {
+      const { id, patch } = action.payload;
+      return {
+        ...state,
+        videos: state.videos.map(v => v.id === id ? { ...v, ...patch } : v),
+        selectedVideo: state.selectedVideo?.id === id
+          ? { ...state.selectedVideo, ...patch }
+          : state.selectedVideo,
+      };
+    }
     case 'SELECT_VIDEO':
       return { ...state, selectedVideo: action.payload };
     case 'SET_SHOW_HOMEPAGE':
@@ -269,6 +280,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_SHOW_RECORDING_MODAL', payload: false });
     // Open VideoPlayer immediately so user sees their recording
     dispatch({ type: 'SELECT_VIDEO', payload: newVideo });
+
+    // Auto-publish: upload to Supabase Storage + mirror metadata so the
+    // /videos/<id> URL is shareable immediately, without the user needing to
+    // click Copy first. Runs in the background; failures are non-fatal and
+    // ensurePublicUrl will retry on demand.
+    if (blob) {
+      (async () => {
+        try {
+          const { url, path, error } = await uploadVideoForSharing(id, blob);
+          if (error || !url) {
+            console.warn('auto-publish upload failed', error);
+            return;
+          }
+          try {
+            const { error: upsertErr } = await upsertVideo({
+              id,
+              title: newVideo.title,
+              duration: newVideo.duration,
+              thumbnail: newVideo.thumbnail,
+              public_url: url,
+              storage_path: path,
+              workspace_id: newVideo.workspaceId,
+              visibility: 'link',
+            });
+            if (upsertErr) console.warn('auto-publish metadata upsert failed', upsertErr);
+          } catch (err) {
+            console.warn('auto-publish metadata upsert threw', err);
+          }
+          // Patch state + persistence with the publicUrl so subsequent shares
+          // skip re-upload. Re-read from localStorage so we don't clobber any
+          // newer changes that landed while the upload was in flight.
+          dispatch({ type: 'PATCH_VIDEO', payload: { id, patch: { publicUrl: url } } });
+          const raw = getStorageItem<VideoRaw[]>('recorded-videos', []);
+          const next = raw.map(v => v.id === id ? { ...v, publicUrl: url } : v);
+          setStorageItem('recorded-videos', next);
+        } catch (err) {
+          console.warn('auto-publish threw', err);
+        }
+      })();
+    }
   }, [state.videos, state.currentWorkspaceId]);
 
   const ensurePublicUrl = useCallback(async (videoId: string) => {
