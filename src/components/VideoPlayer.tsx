@@ -20,7 +20,9 @@ interface VideoPlayerProps {
   isInWatchLater?: (videoId: string) => boolean;
 }
 
-type RightTab = 'edit' | 'activity' | 'transcript' | 'settings';
+type BottomTab = 'edit' | 'activity';
+type SideTab = 'transcript' | 'settings';
+type RightTab = BottomTab | SideTab;
 
 const REACTIONS = [
   { emoji: '❤️', label: 'Love' },
@@ -103,7 +105,8 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── UI state ─────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<RightTab>('edit');
+  const [activeBottomTab, setActiveBottomTab] = useState<BottomTab>('edit');
+  const [activeSideTab, setActiveSideTab] = useState<SideTab>('transcript');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(video.title);
   const [reactions, setReactions] = useState<Record<string, number>>({});
@@ -345,8 +348,8 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   };
 
   // ── Right panel content ───────────────────────────────
-  const renderRightPanel = () => {
-    switch (activeTab) {
+  const renderRightPanel = (tab: RightTab) => {
+    switch (tab) {
       case 'edit':
         return (
           <div className="p-5 space-y-4">
@@ -749,7 +752,10 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
       </header>
 
       {/* ── Main content ─────────────────────────────── */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* ── Left column: video + reactions + bottom tabs ── */}
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
           {/* Video player */}
           <div
@@ -945,7 +951,7 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
             </div>
 
             <button
-              onClick={() => setActiveTab('activity')}
+              onClick={() => setActiveBottomTab('activity')}
               className="flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-gray-300 hover:bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 transition-all"
             >
               <MessageSquare className="w-4 h-4" />
@@ -958,21 +964,49 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
             </button>
         </div>
 
-        {/* ── Bottom panel ─────────────────────────── */}
-        <div className="flex flex-col border-t border-gray-100 bg-white flex-shrink-0 overflow-hidden">
+          {/* ── Bottom panel: Edit / Activity ─────────── */}
+          <div className="flex flex-col border-t border-gray-100 bg-white flex-shrink-0 overflow-hidden">
+            {/* Tab bar */}
+            <div className="flex border-b border-gray-100 flex-shrink-0 px-4 gap-1">
+              {([
+                { id: 'edit', label: 'Edit', icon: Scissors },
+                { id: 'activity', label: 'Activity', icon: Activity },
+              ] as { id: BottomTab; label: string; icon: typeof Scissors }[]).map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveBottomTab(id)}
+                  className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-all border-b-2 ${
+                    activeBottomTab === id
+                      ? 'border-red-600 text-red-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Panel content */}
+            <div className="max-h-80 overflow-y-auto">
+              {renderRightPanel(activeBottomTab)}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Right sidebar: Transcript / Settings ─── */}
+        <aside className="hidden lg:flex w-80 flex-col border-l border-gray-100 bg-white flex-shrink-0 overflow-hidden">
           {/* Tab bar */}
           <div className="flex border-b border-gray-100 flex-shrink-0 px-4 gap-1">
             {([
-              { id: 'edit', label: 'Edit', icon: Scissors },
-              { id: 'activity', label: 'Activity', icon: Activity },
               { id: 'transcript', label: 'Transcript', icon: AlignLeft },
               { id: 'settings', label: 'Settings', icon: Settings },
-            ] as { id: RightTab; label: string; icon: typeof Scissors }[]).map(({ id, label, icon: Icon }) => (
+            ] as { id: SideTab; label: string; icon: typeof Scissors }[]).map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setActiveTab(id)}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold transition-all border-b-2 ${
-                  activeTab === id
+                onClick={() => setActiveSideTab(id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold transition-all border-b-2 ${
+                  activeSideTab === id
                     ? 'border-red-600 text-red-600'
                     : 'border-transparent text-gray-500 hover:text-gray-800'
                 }`}
@@ -984,10 +1018,10 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
           </div>
 
           {/* Panel content */}
-          <div className="max-h-80 overflow-y-auto">
-            {renderRightPanel()}
+          <div className="flex-1 overflow-y-auto">
+            {renderRightPanel(activeSideTab)}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

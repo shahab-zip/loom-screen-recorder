@@ -20,7 +20,16 @@
       "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__list_projects",
       "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__restore_project",
       "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__execute_sql",
-      "Bash(curl -s \"https://yqcsnaezegkigdkfadgl.supabase.co/rest/v1/profiles?select=id&limit=1\" -H \"apikey: dummy\")"
+      "Bash(curl -s \"https://yqcsnaezegkigdkfadgl.supabase.co/rest/v1/profiles?select=id&limit=1\" -H \"apikey: dummy\")",
+      "Read(//Users/shifu/**)",
+      "Bash(ssh -T git@github.com -o StrictHostKeyChecking=no -o ConnectTimeout=5)",
+      "Bash(ls src/components src/lib src/lib/repos src/contexts src/pages)",
+      "Bash(ls supabase/migrations)",
+      "Bash(npm test *)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "mcp__cc8fe707-451e-40c1-9159-229251215f75__list_deployments",
+      "mcp__cc8fe707-451e-40c1-9159-229251215f75__list_projects"
     ]
   }
 }
