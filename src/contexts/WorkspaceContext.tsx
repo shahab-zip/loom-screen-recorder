@@ -284,6 +284,14 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   // ---------------------------------------------------------------------------
 
   const createWorkspace = useCallback(async (name: string, description: string, color: string): Promise<AuthWorkspace | null> => {
+    // Permission guard: viewers cannot create workspaces. Super admins bypass.
+    const isSuper = authState.currentUser?.isSuperAdmin ?? false;
+    if (!isSuper) {
+      if (!currentRole || !hasPermission(currentRole, 'workspace:create')) {
+        return null;
+      }
+    }
+
     const { data, error } = await workspacesRepo.create({ name, description, color });
     if (error || !data) return null;
     const ws = toAuthWorkspace(data);
@@ -295,7 +303,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     dispatch({ type: 'SET_CURRENT_WORKSPACE', payload: ws.id });
     return ws;
-  }, [authState.currentUser]);
+  }, [authState.currentUser, currentRole]);
 
   const updateWorkspace = useCallback(async (id: string, data: Partial<Pick<AuthWorkspace, 'name' | 'description' | 'color'>>) => {
     await workspacesRepo.update(id, data);
