@@ -1,4 +1,5 @@
 import { lazy, Suspense, useRef, useCallback, useMemo, useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppContext } from './contexts/AppContext';
 import { useScreenRecorder } from './hooks/useScreenRecorder';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -42,19 +43,21 @@ function LoadingFallback() {
 }
 
 function AppContent() {
-  const { state, dispatch, handleVideoClick, handleDeleteVideo, handleRenameVideo, handleNewVideo, toggleWatchLater, isInWatchLater } = useAppContext();
+  const { state, dispatch, handleDeleteVideo, handleRenameVideo, handleNewVideo, toggleWatchLater, isInWatchLater } = useAppContext();
   const annotationCanvasRef = useRef<AnnotationCanvasHandle>(null);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get('invite'));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   // ── Screen Recorder ──────────────────────────────────
   const recorder = useScreenRecorder();
 
   const {
-    currentView, selectedVideo, showHomepage, showRecordingModal,
+    showHomepage, showRecordingModal,
     isAnnotating, annotationTool, annotationColor, annotationStrokeWidth,
     videos, viewType, sortType, currentWorkspaceId,
   } = state;
@@ -64,13 +67,28 @@ function AppContent() {
   const isPaused = recorder.isPaused;
   const recordingDuration = recorder.duration;
 
+  // Navigate to a video's URL — used wherever the old context's handleVideoClick was used.
+  const onVideoClick = useCallback((v: Video) => {
+    navigate(`/videos/${v.id}`);
+  }, [navigate]);
+
+  // ── Legacy ?invite=TOKEN redirect to /invite/:token ───
+  useEffect(() => {
+    const token = searchParams.get('invite');
+    if (token) {
+      navigate(`/invite/${token}`, { replace: true });
+    }
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Auto-collapse sidebar ──────────────────────────────
   // Collapse to icon-only when previewing a video so the player gets full width.
   // Also collapse the moment recording stops so the user lands in a focused state.
   const wasRecordingRef = useRef(false);
   useEffect(() => {
-    if (selectedVideo) setSidebarCollapsed(true);
-  }, [selectedVideo]);
+    if (location.pathname.startsWith('/videos/')) setSidebarCollapsed(true);
+  }, [location.pathname]);
   useEffect(() => {
     if (wasRecordingRef.current && !isRecording) {
       setSidebarCollapsed(true);
@@ -82,7 +100,8 @@ function AppContent() {
 
   const handleGetStarted = useCallback(() => {
     dispatch({ type: 'SET_SHOW_HOMEPAGE', payload: false });
-  }, [dispatch]);
+    navigate('/for-you');
+  }, [dispatch, navigate]);
 
   /** Called from RecordingModal when the user picks a mode and confirms */
   const handleStartRecording = useCallback(async (
@@ -144,7 +163,11 @@ function AppContent() {
 
   const openRecordingModal = useCallback(() => dispatch({ type: 'SET_SHOW_RECORDING_MODAL', payload: true }), [dispatch]);
   const closeRecordingModal = useCallback(() => dispatch({ type: 'SET_SHOW_RECORDING_MODAL', payload: false }), [dispatch]);
-  const closeVideo = useCallback(() => dispatch({ type: 'SELECT_VIDEO', payload: null }), [dispatch]);
+
+  const closeVideo = useCallback(() => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/library');
+  }, [navigate]);
 
   const setViewType = useCallback((vt: ViewType) => dispatch({ type: 'SET_VIEW_TYPE', payload: vt }), [dispatch]);
   const setSortType = useCallback((st: SortType) => dispatch({ type: 'SET_SORT_TYPE', payload: st }), [dispatch]);
@@ -172,113 +195,156 @@ function AppContent() {
       });
   }, [videos, viewType, sortType, currentWorkspaceId]);
 
-  // ── Content router ────────────────────────────────────
+  // ── Route components (inline wrappers) ────────────────
 
-  const renderContent = () => {
-    // Video player renders INSIDE the main layout so the sidebar stays visible
-    if (selectedVideo) {
-      return (
-        <VideoPlayer
-          video={selectedVideo}
-          onClose={closeVideo}
-          onDelete={handleDeleteVideo}
-          onRename={handleRenameVideo}
-          toggleWatchLater={toggleWatchLater}
-          isInWatchLater={isInWatchLater}
-        />
-      );
-    }
-
-    switch (currentView) {
-      case 'for-you':
-        return <RouteGuard permission="video:view"><ForYou videos={filteredVideos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} /></RouteGuard>;
-      case 'library':
-        return (
-          <RouteGuard permission="video:view">
-          <VideoLibrary
-            videos={filteredVideos}
-            onVideoClick={handleVideoClick}
-            onNewVideo={openRecordingModal}
-            onDeleteVideo={handleDeleteVideo}
-            onRenameVideo={handleRenameVideo}
-            viewType={viewType}
-            onViewTypeChange={setViewType}
-            sortType={sortType}
-            onSortTypeChange={setSortType}
-          />
-          </RouteGuard>
-        );
-      case 'meetings':
-        return <RouteGuard permission="video:view"><Meetings onNewVideo={openRecordingModal} /></RouteGuard>;
-      case 'watch-later':
-        return <RouteGuard permission="video:view"><WatchLater videos={videos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} /></RouteGuard>;
-      case 'history':
-        return <RouteGuard permission="video:view"><History videos={videos} onVideoClick={handleVideoClick} onNewVideo={openRecordingModal} /></RouteGuard>;
-      case 'settings':
-        return <Settings onNewVideo={openRecordingModal} />;
-      case 'manage':
-        return <RouteGuard permission="member:view"><ManagePage /></RouteGuard>;
-      case 'workspace-settings':
-        return <RouteGuard permission="workspace:view-settings"><WorkspaceSettingsPage /></RouteGuard>;
-      case 'billing':
-        return <RouteGuard permission="workspace:view-billing"><BillingPage /></RouteGuard>;
-      case 'spaces':
-        return <RouteGuard permission="space:create"><SpacesPage /></RouteGuard>;
-      case 'super-admin':
-        return (
-          <RequireSuperAdmin fallback={<div className="p-8 text-gray-600">You don't have access to this page.</div>}>
-            <SuperAdminPanel />
-          </RequireSuperAdmin>
-        );
-      default:
-        return null;
-    }
+  const VideoPlayerRoute = () => {
+    const { videoId } = useParams<{ videoId: string }>();
+    const video = videos.find(v => v.id === videoId);
+    if (!video) return <Navigate to="/library" replace />;
+    return (
+      <VideoPlayer
+        video={video}
+        onClose={closeVideo}
+        onDelete={handleDeleteVideo}
+        onRename={handleRenameVideo}
+        toggleWatchLater={toggleWatchLater}
+        isInWatchLater={isInWatchLater}
+      />
+    );
   };
+
+  const AcceptInviteRoute = () => {
+    const { token } = useParams<{ token: string }>();
+    return (
+      <AcceptInvitePage
+        token={token!}
+        onDone={() => navigate('/for-you', { replace: true })}
+      />
+    );
+  };
+
+  // Show marketing landing only on "/" when showHomepage is true
+  if (showHomepage && location.pathname === '/') {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <Homepage onGetStarted={handleGetStarted} />
+      </Suspense>
+    );
+  }
 
   // ── Render ────────────────────────────────────────────
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
-      {inviteToken ? (
-        <>
-          <Sidebar
-            currentView={currentView}
-            onViewChange={(view) => dispatch({ type: 'SET_VIEW', payload: view })}
-            currentWorkspaceId={currentWorkspaceId}
-            onWorkspaceChange={(id) => dispatch({ type: 'SET_WORKSPACE', payload: id })}
-            collapsed={sidebarCollapsed}
-            onCollapsedChange={setSidebarCollapsed}
-          />
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <AcceptInvitePage token={inviteToken} onDone={() => {
-              window.history.replaceState({}, '', window.location.pathname);
-              setInviteToken(null);
-            }} />
-          </div>
-        </>
-      ) : showHomepage ? (
-        <Suspense fallback={<LoadingFallback />}>
-          <Homepage onGetStarted={handleGetStarted} />
-        </Suspense>
-      ) : (
-        <>
-          <Sidebar
-            currentView={currentView}
-            onViewChange={(view) => dispatch({ type: 'SET_VIEW', payload: view })}
-            currentWorkspaceId={currentWorkspaceId}
-            onWorkspaceChange={(id) => dispatch({ type: 'SET_WORKSPACE', payload: id })}
-            collapsed={sidebarCollapsed}
-            onCollapsedChange={setSidebarCollapsed}
-          />
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <ErrorBoundary>
-              <Suspense fallback={<LoadingFallback />}>
-                {renderContent()}
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-        </>
-      )}
+      <Sidebar
+        currentWorkspaceId={currentWorkspaceId}
+        onWorkspaceChange={(id) => dispatch({ type: 'SET_WORKSPACE', payload: id })}
+        collapsed={sidebarCollapsed}
+        onCollapsedChange={setSidebarCollapsed}
+      />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <ErrorBoundary>
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/" element={<Navigate to="/for-you" replace />} />
+              <Route
+                path="/for-you"
+                element={
+                  <RouteGuard permission="video:view">
+                    <ForYou videos={filteredVideos} onVideoClick={onVideoClick} onNewVideo={openRecordingModal} />
+                  </RouteGuard>
+                }
+              />
+              <Route
+                path="/library"
+                element={
+                  <RouteGuard permission="video:view">
+                    <VideoLibrary
+                      videos={filteredVideos}
+                      onVideoClick={onVideoClick}
+                      onNewVideo={openRecordingModal}
+                      onDeleteVideo={handleDeleteVideo}
+                      onRenameVideo={handleRenameVideo}
+                      viewType={viewType}
+                      onViewTypeChange={setViewType}
+                      sortType={sortType}
+                      onSortTypeChange={setSortType}
+                    />
+                  </RouteGuard>
+                }
+              />
+              <Route path="/videos/:videoId" element={<VideoPlayerRoute />} />
+              <Route
+                path="/meetings"
+                element={
+                  <RouteGuard permission="video:view">
+                    <Meetings onNewVideo={openRecordingModal} />
+                  </RouteGuard>
+                }
+              />
+              <Route
+                path="/watch-later"
+                element={
+                  <RouteGuard permission="video:view">
+                    <WatchLater videos={videos} onVideoClick={onVideoClick} onNewVideo={openRecordingModal} />
+                  </RouteGuard>
+                }
+              />
+              <Route
+                path="/history"
+                element={
+                  <RouteGuard permission="video:view">
+                    <History videos={videos} onVideoClick={onVideoClick} onNewVideo={openRecordingModal} />
+                  </RouteGuard>
+                }
+              />
+              <Route path="/settings" element={<Settings onNewVideo={openRecordingModal} />} />
+              <Route
+                path="/workspace/members"
+                element={
+                  <RouteGuard permission="member:view">
+                    <ManagePage />
+                  </RouteGuard>
+                }
+              />
+              <Route
+                path="/workspace/settings"
+                element={
+                  <RouteGuard permission="workspace:view-settings">
+                    <WorkspaceSettingsPage />
+                  </RouteGuard>
+                }
+              />
+              <Route
+                path="/workspace/billing"
+                element={
+                  <RouteGuard permission="workspace:view-billing">
+                    <BillingPage />
+                  </RouteGuard>
+                }
+              />
+              <Route
+                path="/spaces"
+                element={
+                  <RouteGuard permission="space:create">
+                    <SpacesPage />
+                  </RouteGuard>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireSuperAdmin fallback={<div className="p-8 text-gray-600">You don't have access to this page.</div>}>
+                    <SuperAdminPanel />
+                  </RequireSuperAdmin>
+                }
+              />
+              <Route path="/invite/:token" element={<AcceptInviteRoute />} />
+              <Route path="*" element={<Navigate to="/for-you" replace />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
+      </div>
 
       {/* Recording Modal */}
       {showRecordingModal && (

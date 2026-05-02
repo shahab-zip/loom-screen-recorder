@@ -4,17 +4,15 @@ import {
   ExternalLink, Globe, ChevronRight, UserPlus, Briefcase, LogOut, Shield,
 } from 'lucide-react';
 import { useState, memo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { RoleGuard } from './auth/RoleGuard';
 import { RequirePermission } from './auth/RequirePermission';
 import { InviteModal } from './auth/InviteModal';
 import { ROLE_LABELS, ROLE_COLORS } from '../lib/auth-types';
-import type { CurrentView } from '../lib/types';
 
 interface SidebarProps {
-  currentView: string;
-  onViewChange: (view: CurrentView) => void;
   currentWorkspaceId: string;
   onWorkspaceChange: (workspaceId: string) => void;
   /** Controlled collapse state. If provided, sidebar becomes a controlled component. */
@@ -24,13 +22,14 @@ interface SidebarProps {
 }
 
 export const Sidebar = memo(function Sidebar({
-  currentView,
-  onViewChange,
   currentWorkspaceId,
   onWorkspaceChange,
   collapsed,
   onCollapsedChange,
 }: SidebarProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentPath = location.pathname;
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const isControlled = collapsed !== undefined;
   const isCollapsed = isControlled ? collapsed : internalCollapsed;
@@ -67,23 +66,23 @@ export const Sidebar = memo(function Sidebar({
   };
 
   const mainNav = [
-    { id: 'for-you' as CurrentView,    label: 'For you',         icon: Home },
-    { id: 'library' as CurrentView,    label: 'Library',         icon: Video },
-    { id: 'meetings' as CurrentView,   label: 'Meetings',        icon: Calendar },
-    { id: 'watch-later' as CurrentView,label: 'Watch later',     icon: Clock },
-    { id: 'history' as CurrentView,    label: 'Recent',          icon: History },
-    { id: 'settings' as CurrentView,   label: 'Personal settings', icon: Settings },
+    { to: '/for-you',     label: 'For you',           icon: Home },
+    { to: '/library',     label: 'Library',           icon: Video },
+    { to: '/meetings',    label: 'Meetings',          icon: Calendar },
+    { to: '/watch-later', label: 'Watch later',       icon: Clock },
+    { to: '/history',     label: 'Recent',            icon: History },
+    { to: '/settings',    label: 'Personal settings', icon: Settings },
   ];
 
   const NavItem = ({
-    id, label, icon: Icon, indent = false, external = false,
+    to, label, icon: Icon, indent = false, external = false,
     onClick, badge,
   }: {
-    id?: CurrentView; label: string; icon: React.ComponentType<{ className?: string }>;
+    to?: string; label: string; icon: React.ComponentType<{ className?: string }>;
     indent?: boolean; external?: boolean; onClick?: () => void; badge?: string;
   }) => {
-    const isActive = id && currentView === id;
-    const handleClick = onClick ?? (id ? () => onViewChange(id) : undefined);
+    const isActive = to ? currentPath === to : false;
+    const handleClick = onClick ?? (to ? () => navigate(to) : undefined);
 
     return (
       <button
@@ -134,7 +133,7 @@ export const Sidebar = memo(function Sidebar({
         <div className={`flex items-center border-b border-gray-100 flex-shrink-0 ${isCollapsed ? 'flex-col gap-3 py-4 px-2' : 'justify-between px-4 py-3'}`}>
           {!isCollapsed && (
             <button
-              onClick={() => onViewChange('for-you' as CurrentView)}
+              onClick={() => navigate('/for-you')}
               className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
             >
               <div className="w-7 h-7 bg-red-600 rounded-lg flex items-center justify-center shadow-sm">
@@ -145,7 +144,7 @@ export const Sidebar = memo(function Sidebar({
           )}
           {isCollapsed && (
             <button
-              onClick={() => onViewChange('for-you' as CurrentView)}
+              onClick={() => navigate('/for-you')}
               className="hover:opacity-80 transition-opacity"
             >
               <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center shadow-sm">
@@ -262,7 +261,7 @@ export const Sidebar = memo(function Sidebar({
           {/* Main navigation */}
           <nav className={`px-2 pt-1 pb-2 space-y-0.5`}>
             {mainNav.map(item => (
-              <NavItem key={item.id} {...item} />
+              <NavItem key={item.to} {...item} />
             ))}
           </nav>
 
@@ -286,7 +285,7 @@ export const Sidebar = memo(function Sidebar({
                     </button>
                     {manageExpanded && (
                       <NavItem
-                        id={'manage' as CurrentView}
+                        to="/workspace/members"
                         label="Users"
                         icon={Users}
                         indent
@@ -294,13 +293,13 @@ export const Sidebar = memo(function Sidebar({
                     )}
                   </RequirePermission>
                   <RequirePermission permission="workspace:view-settings">
-                    <NavItem id={'workspace-settings' as CurrentView} label="Workspace" icon={Briefcase} />
+                    <NavItem to="/workspace/settings" label="Workspace" icon={Briefcase} />
                   </RequirePermission>
                   <RequirePermission permission="workspace:view-billing">
-                    <NavItem id={'billing' as CurrentView} label="Billing" icon={CreditCard} external />
+                    <NavItem to="/workspace/billing" label="Billing" icon={CreditCard} external />
                   </RequirePermission>
                   {isSuperAdmin && (
-                    <NavItem id={'super-admin' as CurrentView} label="Super admin" icon={Shield} />
+                    <NavItem to="/admin" label="Super admin" icon={Shield} />
                   )}
                 </nav>
               </RoleGuard>
@@ -316,10 +315,10 @@ export const Sidebar = memo(function Sidebar({
               </RequirePermission>
               <nav className="px-2 pb-2 space-y-0.5">
                 <RequirePermission permission="space:create">
-                  <NavItem id={'spaces' as CurrentView} label="View all spaces" icon={Globe} />
+                  <NavItem to="/spaces" label="View all spaces" icon={Globe} />
                 </RequirePermission>
                 <button
-                  onClick={() => onViewChange('library' as CurrentView)}
+                  onClick={() => navigate('/library')}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group text-gray-600 hover:bg-gray-50 hover:text-gray-900`}
                 >
                   <div
@@ -353,7 +352,7 @@ export const Sidebar = memo(function Sidebar({
                       <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
                       <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-xl shadow-xl z-40 overflow-hidden py-1">
                         <button
-                          onClick={() => { onViewChange('settings' as CurrentView); setShowUserMenu(false); }}
+                          onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
                           className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left"
                         >
                           <Settings className="w-4 h-4 text-gray-400" />
@@ -379,10 +378,10 @@ export const Sidebar = memo(function Sidebar({
           {isCollapsed && (
             <nav className="px-2 pt-1 pb-4 space-y-0.5 border-t border-gray-100 mt-1">
               <RequirePermission permission="workspace:view-settings">
-                <NavItem label="Workspace" icon={Briefcase} onClick={() => onViewChange('workspace-settings' as CurrentView)} />
+                <NavItem label="Workspace" icon={Briefcase} onClick={() => navigate('/workspace/settings')} />
               </RequirePermission>
               <RequirePermission permission="workspace:view-billing">
-                <NavItem label="Billing" icon={CreditCard} onClick={() => onViewChange('billing' as CurrentView)} />
+                <NavItem label="Billing" icon={CreditCard} onClick={() => navigate('/workspace/billing')} />
               </RequirePermission>
             </nav>
           )}

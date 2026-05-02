@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://loom-screen-recorder.vercel.app/sitemap.xml

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { Sidebar } from '../Sidebar';
 
 vi.mock('../../contexts/AuthContext', () => ({
@@ -22,7 +23,11 @@ vi.mock('../../contexts/AppContext', () => ({
 
 describe('Sidebar gating for viewer', () => {
   it('does not show Manage, Workspace settings, Billing, or Spaces links', () => {
-    render(<Sidebar currentView="library" onViewChange={() => {}} currentWorkspaceId="" onWorkspaceChange={() => {}} />);
+    render(
+      <MemoryRouter initialEntries={["/library"]}>
+        <Sidebar currentWorkspaceId="" onWorkspaceChange={() => {}} />
+      </MemoryRouter>
+    );
     expect(screen.queryByText(/Manage/i)).toBeNull();
     expect(screen.queryByText(/Workspace settings/i)).toBeNull();
     expect(screen.queryByText(/Billing/i)).toBeNull();
