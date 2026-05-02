@@ -59,7 +59,7 @@ function AppContent() {
   const {
     showHomepage, showRecordingModal,
     isAnnotating, annotationTool, annotationColor, annotationStrokeWidth,
-    videos, viewType, sortType, currentWorkspaceId,
+    videos, currentWorkspaceId,
   } = state;
 
   // Derive recording state from the hook (single source of truth)
@@ -169,8 +169,6 @@ function AppContent() {
     else navigate('/library');
   }, [navigate]);
 
-  const setViewType = useCallback((vt: ViewType) => dispatch({ type: 'SET_VIEW_TYPE', payload: vt }), [dispatch]);
-  const setSortType = useCallback((st: SortType) => dispatch({ type: 'SET_SORT_TYPE', payload: st }), [dispatch]);
   const setAnnotationToolCb = useCallback((tool: AnnotationTool) => dispatch({ type: 'SET_ANNOTATION_TOOL', payload: tool }), [dispatch]);
   const setAnnotationColorCb = useCallback((color: string) => dispatch({ type: 'SET_ANNOTATION_COLOR', payload: color }), [dispatch]);
   const setAnnotationStrokeWidthCb = useCallback((width: number) => dispatch({ type: 'SET_ANNOTATION_STROKE_WIDTH', payload: width }), [dispatch]);
@@ -178,22 +176,12 @@ function AppContent() {
   // ── Filtered videos (memoized) ────────────────────────
 
   const filteredVideos = useMemo(() => {
-    return videos
-      .filter(v => {
-        // Workspace filter — 'default' shows everything
-        if (currentWorkspaceId !== 'default' && v.workspaceId !== currentWorkspaceId) return false;
-        // View type filter
-        if (viewType === 'clips') return v.duration < 300;
-        if (viewType === 'meetings') return v.duration >= 900;
-        if (viewType === 'archive') return false;
-        return true;
-      })
-      .sort((a, b) => {
-        if (sortType === 'newest') return b.createdAt.getTime() - a.createdAt.getTime();
-        if (sortType === 'oldest') return a.createdAt.getTime() - b.createdAt.getTime();
-        return b.views - a.views;
-      });
-  }, [videos, viewType, sortType, currentWorkspaceId]);
+    return videos.filter(v => {
+      // Workspace filter — 'default' shows everything
+      if (currentWorkspaceId !== 'default' && v.workspaceId !== currentWorkspaceId) return false;
+      return true;
+    });
+  }, [videos, currentWorkspaceId]);
 
   // ── Route components (inline wrappers) ────────────────
 
@@ -265,10 +253,6 @@ function AppContent() {
                       onNewVideo={openRecordingModal}
                       onDeleteVideo={handleDeleteVideo}
                       onRenameVideo={handleRenameVideo}
-                      viewType={viewType}
-                      onViewTypeChange={setViewType}
-                      sortType={sortType}
-                      onSortTypeChange={setSortType}
                     />
                   </RouteGuard>
                 }

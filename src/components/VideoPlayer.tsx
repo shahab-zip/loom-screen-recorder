@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft, Play, Pause, Volume2, VolumeX, Maximize, Minimize, Download,
   Link2, Share2, MoreHorizontal, Edit2, Trash2, Check, MessageSquare, Eye,
@@ -21,6 +22,7 @@ interface VideoPlayerProps {
 }
 
 type RightTab = 'edit' | 'activity' | 'transcript' | 'settings';
+const VALID_TABS: RightTab[] = ['edit', 'activity', 'transcript', 'settings'];
 
 const REACTIONS = [
   { emoji: '❤️', label: 'Love' },
@@ -103,7 +105,29 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── UI state ─────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<RightTab>('edit');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: RightTab = (VALID_TABS as string[]).includes(tabParam ?? '')
+    ? (tabParam as RightTab)
+    : 'edit';
+  const setActiveTab = (tab: RightTab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'edit') next.delete('tab');
+      else next.set('tab', tab);
+      return next;
+    }, { replace: true });
+  };
+  // Read ?t= once so we can apply it after metadata loads. Cleared after consume.
+  const initialSeekRef = useRef<number | null>(null);
+  useEffect(() => {
+    const raw = searchParams.get('t');
+    if (raw == null) { initialSeekRef.current = null; return; }
+    const n = Number(raw);
+    initialSeekRef.current = Number.isFinite(n) && n >= 0 ? n : null;
+    // Only consume on mount; don't react to later changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [summary, setSummary] = useState('');
   const [chapters, setChapters] = useState<{ id: string; time: number; title: string }[]>([]);
@@ -304,12 +328,19 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
       setSharing(false);
     }
 
-    const ok = await writeToClipboard(url);
+    // Append ?t=<seconds> when the user has played past the start.
+    let shareUrl = url;
+    if (currentTime > 0) {
+      const sep = url.includes('?') ? '&' : '?';
+      shareUrl = `${url}${sep}t=${Math.floor(currentTime)}`;
+    }
+
+    const ok = await writeToClipboard(shareUrl);
     if (ok) {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2500);
     } else {
-      window.prompt('Copy link:', url);
+      window.prompt('Copy link:', shareUrl);
     }
   };
 
@@ -754,7 +785,15 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
               onLoadedMetadata={e => {
                   const d = e.currentTarget.duration;
                   // WebM blobs from MediaRecorder often report Infinity — fall back to stored duration
-                  setDuration(isFinite(d) && d > 0 ? d : (video.duration || 0));
+                  const effectiveDuration = isFinite(d) && d > 0 ? d : (video.duration || 0);
+                  setDuration(effectiveDuration);
+                  // Apply ?t= deep-link once: only if valid and within bounds.
+                  const seek = initialSeekRef.current;
+                  if (seek != null && seek <= effectiveDuration) {
+                    e.currentTarget.currentTime = seek;
+                    setCurrentTime(seek);
+                  }
+                  initialSeekRef.current = null;
                 }}
               onEnded={handleVideoEnded}
               onClick={e => e.stopPropagation()}

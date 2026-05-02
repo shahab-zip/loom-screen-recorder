@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, type ReactNode } from 'react';
 import { getStorageItem, setStorageItem } from '../lib/storage';
-import { hydrateVideo, type Video, type VideoRaw, type ViewType, type SortType, type CurrentView } from '../lib/types';
+import { hydrateVideo, type Video, type VideoRaw, type CurrentView } from '../lib/types';
 import { putVideoBlob, deleteVideoBlob, resolveVideoUrl, blobFromUrl, getVideoBlob, uploadVideoForSharing } from '../lib/video-storage';
 
 // ── State ──────────────────────────────────────────────
@@ -11,8 +11,6 @@ interface AppState {
   videos: Video[];
   selectedVideo: Video | null;
   showHomepage: boolean;
-  viewType: ViewType;
-  sortType: SortType;
   // Recording
   isRecording: boolean;
   showRecordingModal: boolean;
@@ -32,8 +30,6 @@ const initialState: AppState = {
   videos: [],
   selectedVideo: null,
   showHomepage: false,
-  viewType: 'all',
-  sortType: 'newest',
   isRecording: false,
   showRecordingModal: false,
   isPaused: false,
@@ -53,8 +49,6 @@ type Action =
   | { type: 'SET_VIDEOS'; payload: Video[] }
   | { type: 'SELECT_VIDEO'; payload: Video | null }
   | { type: 'SET_SHOW_HOMEPAGE'; payload: boolean }
-  | { type: 'SET_VIEW_TYPE'; payload: ViewType }
-  | { type: 'SET_SORT_TYPE'; payload: SortType }
   | { type: 'SET_RECORDING'; payload: boolean }
   | { type: 'SET_SHOW_RECORDING_MODAL'; payload: boolean }
   | { type: 'SET_PAUSED'; payload: boolean }
@@ -80,10 +74,6 @@ function appReducer(state: AppState, action: Action): AppState {
       return { ...state, selectedVideo: action.payload };
     case 'SET_SHOW_HOMEPAGE':
       return { ...state, showHomepage: action.payload };
-    case 'SET_VIEW_TYPE':
-      return { ...state, viewType: action.payload };
-    case 'SET_SORT_TYPE':
-      return { ...state, sortType: action.payload };
     case 'SET_RECORDING':
       return { ...state, isRecording: action.payload };
     case 'SET_SHOW_RECORDING_MODAL':

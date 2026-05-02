@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { VideoLibrary } from '../VideoLibrary';
 
 vi.mock('../../hooks/useVideoPermissions', () => ({
@@ -42,17 +43,15 @@ const noop = () => {};
 describe('VideoLibrary permission gating', () => {
   it('shows delete only on rows the user owns', () => {
     render(
-      <VideoLibrary
-        videos={[baseVideo, otherVideo]}
-        onVideoClick={noop}
-        onNewVideo={noop}
-        onDeleteVideo={noop}
-        onRenameVideo={noop}
-        viewType="all"
-        onViewTypeChange={noop}
-        sortType="newest"
-        onSortTypeChange={noop}
-      />
+      <MemoryRouter>
+        <VideoLibrary
+          videos={[baseVideo, otherVideo]}
+          onVideoClick={noop}
+          onNewVideo={noop}
+          onDeleteVideo={noop}
+          onRenameVideo={noop}
+        />
+      </MemoryRouter>
     );
     const deleteButtons = screen.queryAllByRole('button', { name: /delete/i });
     expect(deleteButtons.length).toBe(1);

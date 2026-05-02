@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   User,
   Video as VideoIcon,
@@ -24,10 +25,23 @@ interface SettingsProps {
 }
 
 type SettingsTab = 'profile' | 'recording' | 'audio' | 'notifications' | 'shortcuts' | 'privacy' | 'storage' | 'appearance';
+const VALID_SECTIONS: SettingsTab[] = ['profile', 'recording', 'audio', 'notifications', 'shortcuts', 'privacy', 'storage', 'appearance'];
 
 export function Settings({ onNewVideo }: SettingsProps) {
   const { state: authState, updateProfile, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionParam = searchParams.get('section');
+  const activeTab: SettingsTab = (VALID_SECTIONS as string[]).includes(sectionParam ?? '')
+    ? (sectionParam as SettingsTab)
+    : 'profile';
+  const setActiveTab = (tab: SettingsTab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'profile') next.delete('section');
+      else next.set('section', tab);
+      return next;
+    }, { replace: true });
+  };
   const [profileSaved, setProfileSaved] = useState(false);
   const [settings, setSettings] = useState({
     // Profile

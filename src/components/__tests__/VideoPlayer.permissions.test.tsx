@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { VideoPlayer } from '../VideoPlayer';
 
 vi.mock('../../hooks/useVideoPermissions', () => ({
@@ -26,14 +27,16 @@ const otherVideo = {
 describe('VideoPlayer permission gating', () => {
   it('hides delete button for non-owner without delete-any', () => {
     render(
-      <VideoPlayer
-        video={otherVideo}
-        onClose={() => {}}
-        onRename={() => {}}
-        onDelete={() => {}}
-        toggleWatchLater={() => {}}
-        isInWatchLater={() => false}
-      />
+      <MemoryRouter>
+        <VideoPlayer
+          video={otherVideo}
+          onClose={() => {}}
+          onRename={() => {}}
+          onDelete={() => {}}
+          toggleWatchLater={() => {}}
+          isInWatchLater={() => false}
+        />
+      </MemoryRouter>
     );
     // Open the "more" overflow menu where Rename/Delete live
     const moreBtns = screen.getAllByRole('button');

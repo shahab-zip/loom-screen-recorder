@@ -1,4 +1,5 @@
 import { useState, memo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal, Grid3x3, List, MoreVertical, Play, Download, Share2, Trash2, Edit2, Eye, Clock, Filter, X, Plus, Sparkles, Bookmark } from 'lucide-react';
 import type { Video, ViewType, SortType } from '../App';
 import { MagneticButton } from './MagneticButton';
@@ -55,23 +56,43 @@ interface VideoLibraryProps {
   onNewVideo: () => void;
   onDeleteVideo: (id: string) => void;
   onRenameVideo: (id: string, newTitle: string) => void;
-  viewType: ViewType;
-  onViewTypeChange: (type: ViewType) => void;
-  sortType: SortType;
-  onSortTypeChange: (type: SortType) => void;
 }
 
+const VALID_VIEWS: ViewType[] = ['all', 'clips', 'meetings', 'archive'];
+const VALID_SORTS: SortType[] = ['newest', 'oldest', 'most-viewed'];
+
 export const VideoLibrary = memo(function VideoLibrary({
-  videos, 
-  onVideoClick, 
+  videos,
+  onVideoClick,
   onNewVideo,
   onDeleteVideo,
   onRenameVideo,
-  viewType,
-  onViewTypeChange,
-  sortType,
-  onSortTypeChange
 }: VideoLibraryProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewParam = searchParams.get('view');
+  const sortParam = searchParams.get('sort');
+  const viewType: ViewType = (VALID_VIEWS as string[]).includes(viewParam ?? '')
+    ? (viewParam as ViewType)
+    : 'all';
+  const sortType: SortType = (VALID_SORTS as string[]).includes(sortParam ?? '')
+    ? (sortParam as SortType)
+    : 'newest';
+  const onViewTypeChange = (vt: ViewType) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (vt === 'all') next.delete('view');
+      else next.set('view', vt);
+      return next;
+    }, { replace: true });
+  };
+  const onSortTypeChange = (st: SortType) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (st === 'newest') next.delete('sort');
+      else next.set('sort', st);
+      return next;
+    }, { replace: true });
+  };
   const { toggleWatchLater, isInWatchLater } = useAppContext();
   const { can } = useWorkspace();
   const canCreateVideo = can('video:create');
