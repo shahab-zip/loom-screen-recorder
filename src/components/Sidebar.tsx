@@ -203,15 +203,17 @@ export const Sidebar = memo(function Sidebar({
                         ))}
                       </div>
                       <div className="border-t border-gray-100 p-1.5">
-                        <button
-                          onClick={() => { setShowCreateWorkspace(true); setShowWorkspaceDropdown(false); }}
-                          className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-gray-50 text-left"
-                        >
-                          <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center">
-                            <Plus className="w-4 h-4 text-gray-500" />
-                          </div>
-                          <span className="text-sm font-medium text-gray-600">New workspace</span>
-                        </button>
+                        <RequirePermission permission="workspace:create">
+                          <button
+                            onClick={() => { setShowCreateWorkspace(true); setShowWorkspaceDropdown(false); }}
+                            className="w-full flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-gray-50 text-left"
+                          >
+                            <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center">
+                              <Plus className="w-4 h-4 text-gray-500" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-600">New workspace</span>
+                          </button>
+                        </RequirePermission>
                       </div>
                     </div>
                   </>

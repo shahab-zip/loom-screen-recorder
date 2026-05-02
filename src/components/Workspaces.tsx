@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, MoreVertical, Edit2, Trash2, Users, Video, Check, Briefcase, FolderOpen, X } from 'lucide-react';
 import type { Video as VideoType } from '../App';
+import { RequirePermission } from './auth/RequirePermission';
 
 export interface Workspace {
   id: string;
@@ -112,14 +113,16 @@ export function Workspaces({ onNewVideo, currentWorkspaceId, onWorkspaceChange, 
             <div className="text-xs text-gray-400 mb-2 tracking-widest" style={{ fontWeight: 600 }}>ORGANIZATION</div>
             <h1 className="text-5xl tracking-tight text-gray-900" style={{ fontWeight: 700 }}>WORKSPACES</h1>
           </div>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-2 text-white shadow-lg hover:shadow-xl hover:scale-105 group"
-            style={{ fontWeight: 600 }}
-          >
-            <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-            <span className="text-sm">New workspace</span>
-          </button>
+          <RequirePermission permission="workspace:create">
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200 flex items-center gap-2 text-white shadow-lg hover:shadow-xl hover:scale-105 group"
+              style={{ fontWeight: 600 }}
+            >
+              <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+              <span className="text-sm">New workspace</span>
+            </button>
+          </RequirePermission>
         </div>
         <p className="text-sm text-gray-500 mt-2">
           Organize your videos across different workspaces • {workspaces.length} {workspaces.length === 1 ? 'workspace' : 'workspaces'}
