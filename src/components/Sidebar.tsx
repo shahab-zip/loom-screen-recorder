@@ -17,6 +17,10 @@ interface SidebarProps {
   onViewChange: (view: CurrentView) => void;
   currentWorkspaceId: string;
   onWorkspaceChange: (workspaceId: string) => void;
+  /** Controlled collapse state. If provided, sidebar becomes a controlled component. */
+  collapsed?: boolean;
+  /** Called when the user clicks the collapse/expand toggle (controlled mode). */
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 export const Sidebar = memo(function Sidebar({
@@ -24,8 +28,16 @@ export const Sidebar = memo(function Sidebar({
   onViewChange,
   currentWorkspaceId,
   onWorkspaceChange,
+  collapsed,
+  onCollapsedChange,
 }: SidebarProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [internalCollapsed, setInternalCollapsed] = useState(false);
+  const isControlled = collapsed !== undefined;
+  const isCollapsed = isControlled ? collapsed : internalCollapsed;
+  const setIsCollapsed = (next: boolean) => {
+    if (isControlled) onCollapsedChange?.(next);
+    else setInternalCollapsed(next);
+  };
   const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');

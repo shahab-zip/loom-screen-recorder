@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useRef, useCallback, useMemo, useState, useEffect } from 'react';
 import { useAppContext } from './contexts/AppContext';
 import { useScreenRecorder } from './hooks/useScreenRecorder';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -48,6 +48,7 @@ function AppContent() {
   const [canRedo, setCanRedo] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get('invite'));
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // ── Screen Recorder ──────────────────────────────────
   const recorder = useScreenRecorder();
@@ -62,6 +63,20 @@ function AppContent() {
   const isRecording = recorder.isRecording;
   const isPaused = recorder.isPaused;
   const recordingDuration = recorder.duration;
+
+  // ── Auto-collapse sidebar ──────────────────────────────
+  // Collapse to icon-only when previewing a video so the player gets full width.
+  // Also collapse the moment recording stops so the user lands in a focused state.
+  const wasRecordingRef = useRef(false);
+  useEffect(() => {
+    if (selectedVideo) setSidebarCollapsed(true);
+  }, [selectedVideo]);
+  useEffect(() => {
+    if (wasRecordingRef.current && !isRecording) {
+      setSidebarCollapsed(true);
+    }
+    wasRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   // ── Handlers ─────────────────────────────────────────
 
@@ -231,6 +246,8 @@ function AppContent() {
             onViewChange={(view) => dispatch({ type: 'SET_VIEW', payload: view })}
             currentWorkspaceId={currentWorkspaceId}
             onWorkspaceChange={(id) => dispatch({ type: 'SET_WORKSPACE', payload: id })}
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={setSidebarCollapsed}
           />
           <div className="flex-1 flex flex-col overflow-hidden">
             <AcceptInvitePage token={inviteToken} onDone={() => {
@@ -250,6 +267,8 @@ function AppContent() {
             onViewChange={(view) => dispatch({ type: 'SET_VIEW', payload: view })}
             currentWorkspaceId={currentWorkspaceId}
             onWorkspaceChange={(id) => dispatch({ type: 'SET_WORKSPACE', payload: id })}
+            collapsed={sidebarCollapsed}
+            onCollapsedChange={setSidebarCollapsed}
           />
           <div className="flex-1 flex flex-col overflow-hidden">
             <ErrorBoundary>
