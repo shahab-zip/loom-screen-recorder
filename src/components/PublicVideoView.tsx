@@ -106,6 +106,7 @@ export function PublicVideoView() {
             controls
             autoPlay
             playsInline
+            preload="metadata"
             onLoadedMetadata={handleLoadedMetadata}
             className="w-full rounded-xl bg-black shadow-2xl"
           />

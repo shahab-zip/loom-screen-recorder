@@ -32,7 +32,10 @@
       "mcp__cc8fe707-451e-40c1-9159-229251215f75__list_projects",
       "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__list_tables",
       "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__apply_migration",
-      "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__get_advisors"
+      "mcp__48142b47-2f6f-4d38-a619-f5d0e3d7a376__get_advisors",
+      "Bash(curl -sI \"https://yqcsnaezegkigdkfadgl.supabase.co/storage/v1/object/public/videos/c8fa178f-e5d4-48f7-87b2-11ea42b5be4b/1777723693551.webm\" -H \"Range: bytes=0-1\")",
+      "Bash(curl -sI https://yqcsnaezegkigdkfadgl.supabase.co/storage/v1/object/public/videos/c8fa178f-e5d4-48f7-87b2-11ea42b5be4b/1777723693551.webm -H 'Range: bytes=0-1')",
+      "Bash(npm view *)"
     ]
   }
 }

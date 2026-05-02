@@ -1,4 +1,23 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import fixWebmDuration from 'fix-webm-duration';
+
+/**
+ * Inject a Duration element into a MediaRecorder-produced webm so the file is
+ * properly seekable and the player can show total length immediately. Falls
+ * back to the original blob if anything goes wrong (non-webm, malformed file,
+ * library throws) — playback still works, it's just slower to seek.
+ */
+async function patchWebmDuration(blob: Blob, durationSeconds: number): Promise<Blob> {
+  if (!blob.type.startsWith('video/webm')) return blob;
+  try {
+    const ms = Math.max(1, Math.round(durationSeconds * 1000));
+    const fixed = await fixWebmDuration(blob, ms, { logger: false });
+    return fixed;
+  } catch (err) {
+    console.warn('webm duration patch failed; using raw blob', err);
+    return blob;
+  }
+}
 
 interface RecordingResult {
   url: string;
@@ -280,9 +299,15 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
       return new Promise((resolve) => {
         recorder.onstop = async () => {
           const mimeType = recorder.mimeType || 'video/webm';
-          const blob = new Blob(chunksRef.current, { type: mimeType });
+          const rawBlob = new Blob(chunksRef.current, { type: mimeType });
           stopAllStreams();
           mediaRecorderRef.current = null;
+
+          // MediaRecorder webm files lack a Duration element in the EBML
+          // header, so browsers treat them as unseekable streams (the user
+          // can't scrub or deep-link via ?t=). Patch the duration in before
+          // we hand the blob over for upload + playback.
+          const blob = await patchWebmDuration(rawBlob, finalDuration);
 
           const url = URL.createObjectURL(blob);
           const thumbnail = await generateThumbnail(blob);
