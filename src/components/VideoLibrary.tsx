@@ -5,6 +5,49 @@ import { MagneticButton } from './MagneticButton';
 import { useAppContext } from '../contexts/AppContext';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useVideoPermissions } from '../hooks/useVideoPermissions';
+
+function VideoRowActions({
+  video,
+  onRename,
+  onDelete,
+}: {
+  video: { id: string; createdBy?: string };
+  onRename: () => void;
+  onDelete: () => void;
+}) {
+  const { canEdit, canDelete } = useVideoPermissions({ ownerId: video.createdBy });
+  return (
+    <>
+      {canEdit && (
+        <button
+          aria-label="Rename"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRename();
+          }}
+          className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
+        >
+          <Edit2 className="w-4 h-4" />
+          Rename
+        </button>
+      )}
+      {canDelete && (
+        <button
+          aria-label="Delete"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="w-full px-4 py-2.5 text-left hover:bg-red-50 transition-colors flex items-center gap-3 text-sm text-red-600"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
+      )}
+    </>
+  );
+}
 
 interface VideoLibraryProps {
   videos: Video[];
@@ -321,45 +364,37 @@ export const VideoLibrary = memo(function VideoLibrary({
                         <span>{video.createdAt.toLocaleDateString()}</span>
                       </div>
                       
-                      <div className="relative">
-                        <button
-                          onClick={() => setOpenMenuId(openMenuId === video.id ? null : video.id)}
-                          className="p-1.5 hover:bg-gray-100 rounded transition-colors"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                        
-                        {openMenuId === video.id && (
-                          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-10 animate-scale-in">
-                            <button
-                              onClick={() => handleRename(video)}
-                              className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                              Rename
-                            </button>
-                            <button
-                              className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
-                            >
-                              <Share2 className="w-4 h-4" />
-                              Share
-                            </button>
-                            <button
-                              className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
-                            >
-                              <Download className="w-4 h-4" />
-                              Download
-                            </button>
-                            <div className="h-px bg-gray-200 my-1" />
-                            <button
-                              onClick={() => handleDelete(video.id)}
-                              className="w-full px-4 py-2.5 text-left hover:bg-red-50 transition-colors flex items-center gap-3 text-sm text-red-600"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete
-                            </button>
-                          </div>
-                        )}
+                      <div className="flex items-center gap-1">
+                        <VideoRowActions
+                          video={video}
+                          onRename={() => handleRename(video)}
+                          onDelete={() => handleDelete(video.id)}
+                        />
+                        <div className="relative">
+                          <button
+                            onClick={() => setOpenMenuId(openMenuId === video.id ? null : video.id)}
+                            className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+
+                          {openMenuId === video.id && (
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-10 animate-scale-in">
+                              <button
+                                className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
+                              >
+                                <Share2 className="w-4 h-4" />
+                                Share
+                              </button>
+                              <button
+                                className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
+                              >
+                                <Download className="w-4 h-4" />
+                                Download
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -438,6 +473,11 @@ export const VideoLibrary = memo(function VideoLibrary({
                   >
                     <Play className="w-5 h-5" />
                   </button>
+                  <VideoRowActions
+                    video={video}
+                    onRename={() => handleRename(video)}
+                    onDelete={() => handleDelete(video.id)}
+                  />
                   <div className="relative">
                     <button
                       onClick={() => setOpenMenuId(openMenuId === video.id ? null : video.id)}
@@ -445,16 +485,9 @@ export const VideoLibrary = memo(function VideoLibrary({
                     >
                       <MoreVertical className="w-5 h-5" />
                     </button>
-                    
+
                     {openMenuId === video.id && (
                       <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-10 animate-scale-in">
-                        <button
-                          onClick={() => handleRename(video)}
-                          className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Rename
-                        </button>
                         <button className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700">
                           <Share2 className="w-4 h-4" />
                           Share
@@ -462,14 +495,6 @@ export const VideoLibrary = memo(function VideoLibrary({
                         <button className="w-full px-4 py-2.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-3 text-sm text-gray-700">
                           <Download className="w-4 h-4" />
                           Download
-                        </button>
-                        <div className="h-px bg-gray-200 my-1" />
-                        <button
-                          onClick={() => handleDelete(video.id)}
-                          className="w-full px-4 py-2.5 text-left hover:bg-red-50 transition-colors flex items-center gap-3 text-sm text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Delete
                         </button>
                       </div>
                     )}
