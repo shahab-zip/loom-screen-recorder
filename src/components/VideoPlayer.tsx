@@ -9,6 +9,7 @@ import {
 import type { Video } from '../App';
 import { resolveVideoUrl } from '../lib/video-storage';
 import { useAppContext } from '../contexts/AppContext';
+import { useVideoPermissions } from '../hooks/useVideoPermissions';
 
 interface VideoPlayerProps {
   video: Video;
@@ -64,6 +65,9 @@ const MOCK_COMMENTS: Comment[] = [
 ];
 
 export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLater, isInWatchLater }: VideoPlayerProps) {
+  // ── Permissions ──────────────────────────────────────
+  const { canDelete, canEdit } = useVideoPermissions({ ownerId: video.createdBy });
+
   // ── Player state ─────────────────────────────────────
   const videoRef = useRef<HTMLVideoElement>(null);
   const progressRef = useRef<HTMLInputElement>(null);
@@ -558,24 +562,27 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
               </div>
             </div>
 
-            <div>
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Danger Zone</h3>
-              <button
-                onClick={() => {
-                  if (confirm('Permanently delete this recording?')) {
-                    onDelete(video.id);
-                    onClose();
-                  }
-                }}
-                className="w-full flex items-center gap-3 p-3 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 transition-colors text-left"
-              >
-                <Trash2 className="w-4 h-4" />
-                <div>
-                  <div className="text-sm font-semibold">Delete recording</div>
-                  <div className="text-xs text-red-400">This cannot be undone</div>
-                </div>
-              </button>
-            </div>
+            {canDelete && (
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Danger Zone</h3>
+                <button
+                  onClick={() => {
+                    if (confirm('Permanently delete this recording?')) {
+                      onDelete(video.id);
+                      onClose();
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 transition-colors text-left"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <div>
+                    <div className="text-sm font-semibold">Delete recording</div>
+                    <div className="text-xs text-red-400">This cannot be undone</div>
+                  </div>
+                </button>
+              </div>
+            )}
           </div>
         );
     }
@@ -609,17 +616,22 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
                 }}
                 className="text-base font-bold text-gray-900 bg-transparent border-b-2 border-red-500 focus:outline-none w-full max-w-sm"
               />
-            ) : (
+            ) : canEdit ? (
               <button
                 onClick={() => setIsEditingTitle(true)}
                 className="flex items-center gap-1.5 group text-left min-w-0"
                 title="Click to rename"
+                aria-label="Rename"
               >
                 <h1 className="text-base font-bold text-gray-900 truncate max-w-sm group-hover:text-red-600 transition-colors">
                   {video.title}
                 </h1>
                 <Edit2 className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity" />
               </button>
+            ) : (
+              <h1 className="text-base font-bold text-gray-900 truncate max-w-sm">
+                {video.title}
+              </h1>
             )}
             <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
               <div className="w-5 h-5 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
@@ -699,28 +711,36 @@ export function VideoPlayer({ video, onClose, onRename, onDelete, toggleWatchLat
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowMoreMenu(false)} />
                 <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-20 w-44 py-1">
-                  <button
-                    onClick={() => { setIsEditingTitle(true); setShowMoreMenu(false); }}
-                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 flex items-center gap-3 text-gray-700"
-                  >
-                    <Edit2 className="w-4 h-4 text-gray-400" /> Rename
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => { setIsEditingTitle(true); setShowMoreMenu(false); }}
+                      className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 flex items-center gap-3 text-gray-700"
+                      aria-label="Rename"
+                    >
+                      <Edit2 className="w-4 h-4 text-gray-400" /> Rename
+                    </button>
+                  )}
                   <button
                     onClick={() => { handleDownload(); setShowMoreMenu(false); }}
                     className="w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 flex items-center gap-3 text-gray-700"
                   >
                     <Download className="w-4 h-4 text-gray-400" /> Download
                   </button>
-                  <div className="h-px bg-gray-100 my-1" />
-                  <button
-                    onClick={() => {
-                      if (confirm('Delete this recording?')) { onDelete(video.id); onClose(); }
-                      setShowMoreMenu(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-3 text-red-600"
-                  >
-                    <Trash2 className="w-4 h-4" /> Delete
-                  </button>
+                  {canDelete && (
+                    <>
+                      <div className="h-px bg-gray-100 my-1" />
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this recording?')) { onDelete(video.id); onClose(); }
+                          setShowMoreMenu(false);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-3 text-red-600"
+                        aria-label="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" /> Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               </>
             )}
