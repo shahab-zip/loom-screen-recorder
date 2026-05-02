@@ -5,6 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Sidebar } from './components/Sidebar';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { RouteGuard } from './components/auth/RouteGuard';
+import { RequireSuperAdmin } from './components/auth/RequireSuperAdmin';
 import { AcceptInvitePage } from './components/auth/AcceptInvitePage';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { AnnotationToolbar, type AnnotationTool } from './components/AnnotationToolbar';
@@ -209,7 +210,11 @@ function AppContent() {
       case 'spaces':
         return <RouteGuard permission="space:create"><SpacesPage /></RouteGuard>;
       case 'super-admin':
-        return <SuperAdminPanel />;
+        return (
+          <RequireSuperAdmin fallback={<div className="p-8 text-gray-600">You don't have access to this page.</div>}>
+            <SuperAdminPanel />
+          </RequireSuperAdmin>
+        );
       default:
         return null;
     }
